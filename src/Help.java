@@ -38,49 +38,22 @@ public class Help extends javax.swing.JFrame {
     }
     
         
-          public void CurrentDate() 
+    public void CurrentDate() 
     {
-
-        
-        Thread clock=new Thread()
-        {
-            public void run()
-            {
-                for(;;)
-                    
-                {
-                
-        Calendar cal=new GregorianCalendar();
-        int month=cal.get(Calendar.MONTH);
-        int year=cal.get(Calendar.YEAR);
-        int day=cal.get(Calendar.DAY_OF_MONTH);
-        
-        txt_date.setText(day+"/"+(month+1)+"/"+(year));
-        
-        
-        
-        int second=cal.get(Calendar.SECOND); 
-        int mint=cal.get(Calendar.MINUTE);
-        int hour=cal.get(Calendar.HOUR);
-        txt_time.setText(hour+":"+(mint)+":"+(second));  
-        
-
-                    
-                    try {
-                        sleep(1000);
-                        
-                    } catch (InterruptedException ex) {
-                        Logger.getLogger(Students_and_Teachers_Management.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                }
+        javax.swing.Timer timer = new javax.swing.Timer(1000, new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                Calendar cal = new GregorianCalendar();
+                int month = cal.get(Calendar.MONTH);
+                int year = cal.get(Calendar.YEAR);
+                int day = cal.get(Calendar.DAY_OF_MONTH);
+                txt_date.setText(day + "/" + (month + 1) + "/" + year);
+                int second = cal.get(Calendar.SECOND); 
+                int mint = cal.get(Calendar.MINUTE);
+                int hour = cal.get(Calendar.HOUR);
+                txt_time.setText(hour + ":" + mint + ":" + second);  
             }
-        };
-        
-        
-        
-        clock.start();
-        
-                
+        });
+        timer.start();
     }
 
 
@@ -364,21 +337,14 @@ public class Help extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
-        // TODO add your handling code here:
-        
-         try
-            {
-    Clip clip = AudioSystem.getClip();
-    clip.open(AudioSystem.getAudioInputStream(new File("C:\\Users\\Subrata_CSE\\Desktop\\applause.wav")));
-    clip.start();
-            }
-    catch (LineUnavailableException | UnsupportedAudioFileException | IOException exc)
-             {
-        exc.printStackTrace(System.out);
-             }
-        
-        
-        
+        File audioFile = new File("src/images/applause.wav");
+        if (audioFile.exists()) {
+            try {
+                Clip clip = AudioSystem.getClip();
+                clip.open(AudioSystem.getAudioInputStream(audioFile));
+                clip.start();
+            } catch (Exception ignored) {}
+        }
 
         Students_and_Teachers_Management e = new Students_and_Teachers_Management();
         e.setVisible(true);
@@ -407,19 +373,19 @@ public class Help extends javax.swing.JFrame {
 
     private void txt_guideActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txt_guideActionPerformed
         try {
-            
-           
-            String URI="https://www.dropbox.com/s/lqgtqxnm60qr3qw/index.html?dl=0";
-            
-            //https://www.dropbox.com/sh/wq82naazidry7sz/AABniHUPfBKtLMwSIhwwxZhna?dl=0
-            java.awt.Desktop.getDesktop().browse(java.net.URI.create(URI));
-            
+            java.io.File localHelp = new java.io.File("help center/index.html");
+            if (!localHelp.exists()) {
+                localHelp = new java.io.File("src/index.html");
+            }
+            if (localHelp.exists() && java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                java.awt.Desktop.getDesktop().browse(localHelp.toURI());
+            } else {
+                String URI="https://www.dropbox.com/s/lqgtqxnm60qr3qw/index.html?dl=0";
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create(URI));
+            }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, "Sorry!!!Unable to Open Web link.");
+            JOptionPane.showMessageDialog(null, "Sorry!!! Unable to open Help Guide: " + e.getMessage());
         }
-        
-        
-        
     }//GEN-LAST:event_txt_guideActionPerformed
 
     /**

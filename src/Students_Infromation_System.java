@@ -44,47 +44,20 @@ public class Students_Infromation_System extends javax.swing.JFrame {
                 
     public void CurrentDate() 
     {
-
-        
-        Thread clock=new Thread()
-        {
-            public void run()
-            {
-                for(;;)
-                    
-                {
-                
-        Calendar cal=new GregorianCalendar();
-        int month=cal.get(Calendar.MONTH);
-        int year=cal.get(Calendar.YEAR);
-        int day=cal.get(Calendar.DAY_OF_MONTH);
-        
-        txt_date.setText(day+"/"+(month+1)+"/"+(year));
-        
-        
-        
-        int second=cal.get(Calendar.SECOND); 
-        int mint=cal.get(Calendar.MINUTE);
-        int hour=cal.get(Calendar.HOUR);
-        txt_time.setText(hour+":"+(mint)+":"+(second));  
-        
-
-                    
-                    try {
-                        sleep(1000);
-                        
-                    } catch (InterruptedException ex) {
-                        Logger.getLogger(Students_and_Teachers_Management.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                }
+        javax.swing.Timer timer = new javax.swing.Timer(1000, new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                Calendar cal = new GregorianCalendar();
+                int month = cal.get(Calendar.MONTH);
+                int year = cal.get(Calendar.YEAR);
+                int day = cal.get(Calendar.DAY_OF_MONTH);
+                txt_date.setText(day + "/" + (month + 1) + "/" + year);
+                int second = cal.get(Calendar.SECOND); 
+                int mint = cal.get(Calendar.MINUTE);
+                int hour = cal.get(Calendar.HOUR);
+                txt_time.setText(hour + ":" + mint + ":" + second);  
             }
-        };
-        
-        
-        
-        clock.start();
-        
-                
+        });
+        timer.start();
     }
     
  
@@ -673,484 +646,44 @@ public class Students_Infromation_System extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void cmd_searchActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_searchActionPerformed
-        // TODO add your handling code here:
-
-        try {
-            String sql="select  * from  student_info where Roll=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-            
-        else 
-            {
-                  JOptionPane.showMessageDialog(null,"No data Found.Please try again!!!");
-            }
-
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
+        String term = cmd_search.getText().trim();
+        if (term.isEmpty()) {
+            JOptionPane.showMessageDialog(null, "Please enter a search term (Roll, Name, or Mobile).");
+            return;
         }
 
-        try {
-            String sql="select  * from  student_info where First_name=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
+        String sql = "SELECT * FROM student_info WHERE Roll = ? OR First_name LIKE ? OR Last_name LIKE ? OR Mobile_no LIKE ? OR Class = ?";
+        try (PreparedStatement searchPst = conn.prepareStatement(sql)) {
+            int roll = -1;
+            try {
+                roll = Integer.parseInt(term);
+            } catch (NumberFormatException ignored) {}
 
-            rs=pst.executeQuery();
+            searchPst.setInt(1, roll);
+            searchPst.setString(2, "%" + term + "%");
+            searchPst.setString(3, "%" + term + "%");
+            searchPst.setString(4, "%" + term + "%");
+            searchPst.setInt(5, roll);
 
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
+            try (ResultSet searchRs = searchPst.executeQuery()) {
+                if (searchRs.next()) {
+                    txt_roll.setText(searchRs.getString("Roll"));
+                    txt_firstname.setText(searchRs.getString("First_name"));
+                    txt_lastname.setText(searchRs.getString("Last_name"));
+                    txt_classname.setText(searchRs.getString("Class"));
+                    txt_year.setText(searchRs.getString("Year"));
+                    txt_birthday.setText(searchRs.getString("Birth_date"));
+                    txt_mobile.setText(searchRs.getString("Mobile_no"));
+                    txt_sex.setText(searchRs.getString("Sex"));
+                    txt_permanent.setText(searchRs.getString("permanent"));
+                    txt_present.setText(searchRs.getString("Present"));
+                } else {
+                    JOptionPane.showMessageDialog(null, "No data Found. Please try again!!!");
+                }
             }
-
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
+            JOptionPane.showMessageDialog(null, "Search error: " + e.getMessage());
         }
-
-        try {
-            String sql="select  * from  student_info where Last_name=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,e);
-
-        }
-
-        try {
-            String sql="select  * from  student_info where Class=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
-        }
-
-        try {
-            String sql="select  * from  student_info where Year=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
-        }
-
-        try {
-            String sql="select  * from  student_info where Birth_date=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
-        }
-
-        try {
-            String sql="select  * from  student_info where Mobile_no=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
-        }
-
-        try {
-            String sql="select  * from  student_info where Sex=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
-        }
-
-        try {
-            String sql="select  * from  student_info where permanent=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,"We face a Problem.");
-
-        }
-
-        try {
-            String sql="select  * from  student_info where Present=?";
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, cmd_search.getText());
-
-            rs=pst.executeQuery();
-
-            if(rs.next())
-            {
-
-                String add1=rs.getString("Roll");
-                txt_roll.setText(add1);
-
-                String add2=rs.getString("First_name");
-                txt_firstname.setText(add2);
-
-                String add3=rs.getString("Last_name");
-                txt_lastname.setText(add3);
-
-                String add4=rs.getString("Class");
-                txt_classname.setText(add4);
-
-                String add5=rs.getString("Year");
-                txt_year.setText(add5);
-
-                String add6=rs.getString("Birth_date");
-                txt_birthday.setText(add6);
-
-                String add7=rs.getString("Mobile_no");
-                txt_mobile.setText(add7);
-
-                String add8=rs.getString("Sex");
-                txt_sex.setText(add8);
-
-                String add9=rs.getString("permanent");
-                txt_permanent.setText(add9);
-
-                String add10=rs.getString("Present");
-                txt_present.setText(add10);
-
-            }
-
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(null,e);
-
-        }
-
     }//GEN-LAST:event_cmd_searchActionPerformed
 
     private void txt_presentActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txt_presentActionPerformed
@@ -1232,31 +765,29 @@ public class Students_Infromation_System extends javax.swing.JFrame {
         if(p==0)
         {
            try {
-            
-            String value1=txt_roll.getText();
-            String value2=txt_firstname.getText();  
-            String value3=txt_lastname.getText();
-            String value4=txt_classname.getText();
-            String value5=txt_year.getText();
-            String value6=txt_birthday.getText();
-            String value7=txt_mobile.getText();
-            String value8=txt_sex.getText();
-            String value9=txt_permanent.getText();
-            String value10=txt_present.getText();
-            
-            String sql="Update student_info set Roll='"+value1+"',First_name='"+value2+"',Last_name='"+value3+"',Class='"+value4+"', Year='"+value5+"',Birth_date='"+value6+"',Mobile_no='"+value7+"',Sex='"+value8+"',permanent='"+value9+"',Present='"+value10+"' where Roll='"+value1+"'";        
-            
-            
-            
-            pst=conn.prepareStatement(sql);
-             pst.execute();
-            
-           JOptionPane.showMessageDialog(null,"Table Updated Successfully."); 
-            
-        } catch (Exception e) {
-              
-            JOptionPane.showMessageDialog(null,"We face a Problem."); 
-        }
+                String sql = "UPDATE student_info SET First_name=?, Last_name=?, Class=?, Year=?, Birth_date=?, Mobile_no=?, Sex=?, permanent=?, Present=? WHERE Roll=?";
+                try (PreparedStatement updatePst = conn.prepareStatement(sql)) {
+                    updatePst.setString(1, txt_firstname.getText().trim());
+                    updatePst.setString(2, txt_lastname.getText().trim());
+                    updatePst.setString(3, txt_classname.getText().trim());
+                    updatePst.setString(4, txt_year.getText().trim());
+                    updatePst.setString(5, txt_birthday.getText().trim());
+                    updatePst.setString(6, txt_mobile.getText().trim());
+                    updatePst.setString(7, txt_sex.getText().trim());
+                    updatePst.setString(8, txt_permanent.getText().trim());
+                    updatePst.setString(9, txt_present.getText().trim());
+                    updatePst.setString(10, txt_roll.getText().trim());
+                    
+                    int rows = updatePst.executeUpdate();
+                    if (rows > 0) {
+                        JOptionPane.showMessageDialog(null, "Table Updated Successfully.");
+                    } else {
+                        JOptionPane.showMessageDialog(null, "No student record found with Roll: " + txt_roll.getText());
+                    }
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Update error: " + e.getMessage());
+            }
         
         }
         

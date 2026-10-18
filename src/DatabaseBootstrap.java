@@ -7,6 +7,9 @@ import java.sql.Statement;
  * Automatically creates required tables and initial seed data if not present.
  */
 public class DatabaseBootstrap {
+    public static void initialize(Connection conn) {
+        bootstrap(conn);
+    }
 
     public static void bootstrap(Connection conn) {
         if (conn == null) {

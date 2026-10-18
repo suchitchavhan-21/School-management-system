@@ -33,47 +33,20 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
         
     public void CurrentDate() 
     {
-
-        
-        Thread clock=new Thread()
-        {
-            public void run()
-            {
-                for(;;)
-                    
-                {
-                
-        Calendar cal=new GregorianCalendar();
-        int month=cal.get(Calendar.MONTH);
-        int year=cal.get(Calendar.YEAR);
-        int day=cal.get(Calendar.DAY_OF_MONTH);
-        
-        date_txt.setText(day+"/"+(month+1)+"/"+(year));
-        
-        
-        
-        int second=cal.get(Calendar.SECOND); 
-        int mint=cal.get(Calendar.MINUTE);
-        int hour=cal.get(Calendar.HOUR);
-        txt_time.setText(hour+":"+(mint)+":"+(second));  
-        
-
-                    
-                    try {
-                        sleep(1000);
-                        
-                    } catch (InterruptedException ex) {
-                        Logger.getLogger(Students_and_Teachers_Management.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                }
+        javax.swing.Timer timer = new javax.swing.Timer(1000, new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                Calendar cal = new GregorianCalendar();
+                int month = cal.get(Calendar.MONTH);
+                int year = cal.get(Calendar.YEAR);
+                int day = cal.get(Calendar.DAY_OF_MONTH);
+                date_txt.setText(day + "/" + (month + 1) + "/" + year);
+                int second = cal.get(Calendar.SECOND); 
+                int mint = cal.get(Calendar.MINUTE);
+                int hour = cal.get(Calendar.HOUR);
+                txt_time.setText(hour + ":" + mint + ":" + second);  
             }
-        };
-        
-        
-        
-        clock.start();
-        
-                
+        });
+        timer.start();
     }
     
         
@@ -116,7 +89,16 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
         jSeparator4 = new javax.swing.JSeparator();
         txt_help = new javax.swing.JButton();
 
-        jButton1.setText("jButton1");
+        jButton1.setBackground(new java.awt.Color(255, 255, 255));
+        jButton1.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        jButton1.setForeground(new java.awt.Color(142, 68, 173));
+        jButton1.setText("Exam & Grades");
+        jButton1.setToolTipText("Examination Marks & Grade Management");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
 
         jLabel1.setText("jLabel1");
 
@@ -296,10 +278,12 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
                             .addGroup(layout.createSequentialGroup()
                                 .addGap(25, 25, 25)
                                 .addComponent(txt_teachers)
-                                .addGap(93, 93, 93)
+                                .addGap(35, 35, 35)
                                 .addComponent(txt_students)
-                                .addGap(120, 120, 120)
-                                .addComponent(txt_Employee))
+                                .addGap(35, 35, 35)
+                                .addComponent(txt_Employee)
+                                .addGap(35, 35, 35)
+                                .addComponent(jButton1))
                             .addGroup(layout.createSequentialGroup()
                                 .addComponent(txt_teacher_management)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -341,7 +325,8 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                         .addComponent(txt_teachers)
-                        .addComponent(txt_students))
+                        .addComponent(txt_students)
+                        .addComponent(jButton1))
                     .addComponent(txt_Employee))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(jSeparator2, javax.swing.GroupLayout.PREFERRED_SIZE, 9, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -411,6 +396,11 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
                  close();
         
     }//GEN-LAST:event_txt_EmployeeActionPerformed
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {
+        new Student_Grades_System().setVisible(true);
+        close();
+    }
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // TODO add your handling code here:
