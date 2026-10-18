@@ -1,0 +1,15 @@
+# Build outputs
+build/
+dist/*.jar
+!dist/lib/
+
+# NetBeans user specific configuration
+nbproject/private/
+
+# Local databases
+*.sqlite
+*.db
+
+# Temporary / Scratch
+scratch/
+*.log
