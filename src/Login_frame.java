@@ -22,10 +22,27 @@ public class Login_frame extends javax.swing.JFrame {
     private void checkFirstRunSetup() {
         if (conn == null) return;
         try {
-            if (PasswordSecurity.isSetupRequired(conn)) {
+            PasswordSecurity.SetupState state = PasswordSecurity.getSetupState(conn);
+            if (state == PasswordSecurity.SetupState.UNINITIALIZED) {
                 SwingUtilities.invokeLater(() -> {
                     FirstRunSetupDialog dialog = new FirstRunSetupDialog(this, conn);
                     dialog.setVisible(true);
+                });
+            } else if (state == PasswordSecurity.SetupState.INCONSISTENT_MISSING_ADMIN) {
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this,
+                        "Database Integrity Alert:\nUser accounts exist, but the administrator authorization key is missing.\n" +
+                        "For data safety, automatic account overwrite is disabled.\n" +
+                        "Please restore administrator credentials or contact your system administrator.",
+                        "Inconsistent Security State", JOptionPane.WARNING_MESSAGE);
+                });
+            } else if (state == PasswordSecurity.SetupState.INCONSISTENT_MISSING_USERS) {
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this,
+                        "Database Integrity Alert:\nAdministrator authorization key exists, but no user accounts were found.\n" +
+                        "For data safety, automatic credential reset is disabled.\n" +
+                        "Please restore your user account or contact your system administrator.",
+                        "Inconsistent Security State", JOptionPane.WARNING_MESSAGE);
                 });
             }
         } catch (Exception e) {

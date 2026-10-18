@@ -93,6 +93,18 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
             }
         });
 
+        btn_attendance = new javax.swing.JButton();
+        btn_attendance.setBackground(new java.awt.Color(255, 255, 255));
+        btn_attendance.setFont(new java.awt.Font("Tahoma", 1, 14)); // NOI18N
+        btn_attendance.setForeground(new java.awt.Color(41, 128, 185));
+        btn_attendance.setText("Attendance");
+        btn_attendance.setToolTipText("Student Daily Attendance Management");
+        btn_attendance.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btn_attendanceActionPerformed(evt);
+            }
+        });
+
         jLabel1.setText("jLabel1");
 
         jCheckBox1.setText("jCheckBox1");
@@ -269,14 +281,16 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
                     .addGroup(layout.createSequentialGroup()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(layout.createSequentialGroup()
-                                .addGap(25, 25, 25)
+                                .addGap(20, 20, 20)
                                 .addComponent(txt_teachers)
-                                .addGap(35, 35, 35)
+                                .addGap(20, 20, 20)
                                 .addComponent(txt_students)
-                                .addGap(35, 35, 35)
+                                .addGap(20, 20, 20)
                                 .addComponent(txt_Employee)
-                                .addGap(35, 35, 35)
-                                .addComponent(jButton1))
+                                .addGap(20, 20, 20)
+                                .addComponent(jButton1)
+                                .addGap(20, 20, 20)
+                                .addComponent(btn_attendance))
                             .addGroup(layout.createSequentialGroup()
                                 .addComponent(txt_teacher_management)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -319,7 +333,8 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
                     .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                         .addComponent(txt_teachers)
                         .addComponent(txt_students)
-                        .addComponent(jButton1))
+                        .addComponent(jButton1)
+                        .addComponent(btn_attendance))
                     .addComponent(txt_Employee))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(jSeparator2, javax.swing.GroupLayout.PREFERRED_SIZE, 9, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -395,6 +410,11 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
         close();
     }
 
+    private void btn_attendanceActionPerformed(java.awt.event.ActionEvent evt) {
+        new Student_Attendance_System().setVisible(true);
+        close();
+    }
+
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
         // TODO add your handling code here:
     }//GEN-LAST:event_jButton2ActionPerformed
@@ -410,6 +430,7 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
  
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JButton btn_attendance;
     private javax.swing.JLabel date_txt;
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;

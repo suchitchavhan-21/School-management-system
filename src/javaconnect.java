@@ -63,15 +63,56 @@ public class javaconnect {
     }
 
     private static Connection connectMySQL(Properties props) {
-        String host = props.getProperty("db.mysql.host", "localhost").trim();
-        String port = props.getProperty("db.mysql.port", "3306").trim();
-        String db = props.getProperty("db.mysql.database", "student_database").trim();
-        String user = props.getProperty("db.mysql.username", "root").trim();
-        String pass = props.getProperty("db.mysql.password", "");
-        String useSSL = props.getProperty("db.mysql.useSSL", "false").trim();
+        String host = getPropOrEnv(props, "db.mysql.host", "SMS_MYSQL_HOST", "localhost").trim();
+        String portStr = getPropOrEnv(props, "db.mysql.port", "SMS_MYSQL_PORT", "3306").trim();
+        String db = getPropOrEnv(props, "db.mysql.database", "SMS_MYSQL_DATABASE", "student_database").trim();
+        String user = getPropOrEnv(props, "db.mysql.username", "SMS_MYSQL_USER", "").trim();
+        String pass = getPropOrEnv(props, "db.mysql.password", "SMS_MYSQL_PASSWORD", "");
+        String useSSL = getPropOrEnv(props, "db.mysql.useSSL", "SMS_MYSQL_USE_SSL", "true").trim();
 
-        String url = String.format("jdbc:mysql://%s:%s/%s?zeroDateTimeBehavior=convertToNull&useSSL=%s",
-                host, port, db, useSSL);
+        // Strict configuration validation
+        if (host.isEmpty() || db.isEmpty()) {
+            activeDbType = "FAILED";
+            String err = "MySQL configuration error: Database host and database name must be specified.";
+            System.err.println("[javaconnect] " + err);
+            showError("Database Configuration Error", err);
+            return null;
+        }
+
+        int port;
+        try {
+            port = Integer.parseInt(portStr);
+            if (port < 1 || port > 65535) throw new NumberFormatException();
+        } catch (NumberFormatException e) {
+            activeDbType = "FAILED";
+            String err = "MySQL configuration error: Invalid port number '" + portStr + "'. Port must be between 1 and 65535.";
+            System.err.println("[javaconnect] " + err);
+            showError("Database Configuration Error", err);
+            return null;
+        }
+
+        if (user.isEmpty()) {
+            activeDbType = "FAILED";
+            String err = "MySQL configuration error: Database username is missing.\n" +
+                         "Please configure 'db.mysql.username' in database.properties or set environment variable 'SMS_MYSQL_USER'.";
+            System.err.println("[javaconnect] " + err);
+            showError("Database Authentication Error", err);
+            return null;
+        }
+
+        // Forbid insecure root with blank password in network deployments
+        if (user.equalsIgnoreCase("root") && pass.isEmpty()) {
+            activeDbType = "FAILED";
+            String err = "MySQL security violation: Connecting as 'root' with an empty password is prohibited.\n" +
+                         "Please configure a dedicated, least-privilege user account with an authentic password.";
+            System.err.println("[javaconnect] " + err);
+            showError("Database Security Violation", err);
+            return null;
+        }
+
+        String sslParams = "true".equalsIgnoreCase(useSSL) ? "useSSL=true&requireSSL=true" : "useSSL=false";
+        String url = String.format("jdbc:mysql://%s:%d/%s?zeroDateTimeBehavior=convertToNull&%s",
+                host, port, db, sslParams);
 
         Connection conn = null;
         try {
@@ -87,18 +128,30 @@ public class javaconnect {
             }
             activeDbType = "FAILED";
             String errorMsg = String.format(
-                "Unable to connect to or initialize the configured MySQL database on %s:%s/%s.\n" +
+                "Unable to connect to or initialize the configured MySQL database on %s:%d/%s.\n" +
                 "Error: %s\n\n" +
-                "The system will NOT silently switch databases to prevent data corruption or exposure.\n" +
-                "Please verify your MySQL server status and configuration in 'database.properties'.",
+                "Zero-Trust Policy: The system will NOT silently switch to another database to prevent data exposure or corruption.\n" +
+                "Please verify your MySQL server status and configuration in 'database.properties' or environment variables.",
                 host, port, db, e.getMessage()
             );
             System.err.println("[javaconnect] " + errorMsg);
-            try {
-                JOptionPane.showMessageDialog(null, errorMsg, "Database Connection Error", JOptionPane.ERROR_MESSAGE);
-            } catch (Exception ignored) {}
+            showError("Database Connection Error", errorMsg);
             return null;
         }
+    }
+
+    private static void showError(String title, String message) {
+        try {
+            JOptionPane.showMessageDialog(null, message, title, JOptionPane.ERROR_MESSAGE);
+        } catch (Exception ignored) {}
+    }
+
+    private static String getPropOrEnv(Properties props, String propKey, String envKey, String defaultVal) {
+        String envVal = System.getenv(envKey);
+        if (envVal != null && !envVal.trim().isEmpty()) {
+            return envVal.trim();
+        }
+        return props.getProperty(propKey, defaultVal);
     }
 
     private static Connection connectSQLite(String fileName) {
@@ -117,9 +170,7 @@ public class javaconnect {
             activeDbType = "FAILED";
             String errorMsg = "Unable to connect to or bootstrap SQLite database '" + fileName + "': " + e.getMessage();
             System.err.println("[javaconnect] " + errorMsg);
-            try {
-                JOptionPane.showMessageDialog(null, errorMsg, "Database Error", JOptionPane.ERROR_MESSAGE);
-            } catch (Exception ignored) {}
+            showError("Database Error", errorMsg);
             return null;
         }
     }
@@ -137,15 +188,15 @@ public class javaconnect {
             }
         }
 
-        // Set secure defaults and create the configuration file
+        // Set secure, non-secret defaults and write configuration template if absent
         props.setProperty("db.type", "sqlite");
         props.setProperty("db.sqlite.file", "student_database.sqlite");
         props.setProperty("db.mysql.host", "localhost");
         props.setProperty("db.mysql.port", "3306");
         props.setProperty("db.mysql.database", "student_database");
-        props.setProperty("db.mysql.username", "root");
+        props.setProperty("db.mysql.username", "");
         props.setProperty("db.mysql.password", "");
-        props.setProperty("db.mysql.useSSL", "false");
+        props.setProperty("db.mysql.useSSL", "true");
 
         try (FileOutputStream out = new FileOutputStream(file)) {
             props.store(out, "School Management System Database Configuration");

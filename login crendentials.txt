@@ -8,4 +8,4 @@ have been permanently removed from the source code and configuration.
 INITIAL SETUP:
 On first launch, the application will automatically prompt the administrator to set up
 their secure administrator account and password. All passwords are encrypted and stored
-using PBKDF2 with salted HMAC-SHA256 (65,536 iterations).
+using PBKDF2 with salted HMAC-SHA256 (210,000 iterations).

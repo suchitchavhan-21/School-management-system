@@ -20,18 +20,22 @@ public class SystemTestSuite {
         ExamMarksDAOTest daoTest = new ExamMarksDAOTest();
         boolean daoPassed = daoTest.runAllTests();
 
-        // 3. Security, Ethical Hacking & Resilience Suite (Isolated DB)
+        // 3. Student Attendance DAO & Tracking Suite (Isolated DB)
+        AttendanceDAOTest attendanceTest = new AttendanceDAOTest();
+        boolean attendancePassed = attendanceTest.runAllTests();
+
+        // 4. Security, Ethical Hacking & Resilience Suite (Isolated DB)
         SecurityAndResilienceTest secTest = new SecurityAndResilienceTest();
         boolean secPassed = secTest.runAllTests();
 
         long duration = System.currentTimeMillis() - startTime;
 
-        int totalRun = calcTest.getTestsRun() + daoTest.getTestsRun() + secTest.getTestsRun();
-        int totalPassed = calcTest.getTestsPassed() + daoTest.getTestsPassed() + secTest.getTestsPassed();
-        int totalFailed = calcTest.getTestsFailed() + daoTest.getTestsFailed() + secTest.getTestsFailed();
-        int totalSkipped = calcTest.getTestsSkipped() + daoTest.getTestsSkipped() + secTest.getTestsSkipped();
+        int totalRun = calcTest.getTestsRun() + daoTest.getTestsRun() + attendanceTest.getTestsRun() + secTest.getTestsRun();
+        int totalPassed = calcTest.getTestsPassed() + daoTest.getTestsPassed() + attendanceTest.getTestsPassed() + secTest.getTestsPassed();
+        int totalFailed = calcTest.getTestsFailed() + daoTest.getTestsFailed() + attendanceTest.getTestsFailed() + secTest.getTestsFailed();
+        int totalSkipped = calcTest.getTestsSkipped() + daoTest.getTestsSkipped() + attendanceTest.getTestsSkipped() + secTest.getTestsSkipped();
 
-        boolean allPassed = calcPassed && daoPassed && secPassed && (totalFailed == 0) && (totalSkipped == 0) && (totalRun > 0);
+        boolean allPassed = calcPassed && daoPassed && attendancePassed && secPassed && (totalFailed == 0) && (totalSkipped == 0) && (totalRun > 0);
 
         System.out.println("================================================================================");
         System.out.println("                     COMPREHENSIVE TEST SUITE SUMMARY                           ");
@@ -40,6 +44,8 @@ public class SystemTestSuite {
                 calcTest.getTestsPassed(), calcTest.getTestsFailed(), calcTest.getTestsSkipped(), calcTest.getTestsRun());
         System.out.printf("  ExamMarksDAOTest:          %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
                 daoTest.getTestsPassed(), daoTest.getTestsFailed(), daoTest.getTestsSkipped(), daoTest.getTestsRun());
+        System.out.printf("  AttendanceDAOTest:         %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
+                attendanceTest.getTestsPassed(), attendanceTest.getTestsFailed(), attendanceTest.getTestsSkipped(), attendanceTest.getTestsRun());
         System.out.printf("  SecurityAndResilienceTest: %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
                 secTest.getTestsPassed(), secTest.getTestsFailed(), secTest.getTestsSkipped(), secTest.getTestsRun());
         System.out.println("--------------------------------------------------------------------------------");

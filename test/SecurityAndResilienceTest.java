@@ -70,7 +70,10 @@ public class SecurityAndResilienceTest {
             testMalformedHashHandlingAndDoSImmunity();
             testOlderHashCompatibilityAndUpgrade(conn);
             testPasswordAndAdminKeyStrengthValidation();
+            testSetupStatesAndInconsistencyDetection(conn);
+            testCredentialPreservationAndRefusalToOverwrite(conn);
             testTransactionalFirstRunSetupAndRollback(conn);
+            testPBKDF2AuthenticationLatencyBenchmark();
             testAdminParameterIndexIntegrity(conn);
             testSqlInjectionImmunity(conn);
         } catch (Exception e) {
@@ -180,6 +183,7 @@ public class SecurityAndResilienceTest {
         assertTrue("Table 'teacher_info' exists", tables.contains("teacher_info"));
         assertTrue("Table 'employee_info' exists", tables.contains("employee_info"));
         assertTrue("Table 'exam_marks' exists", tables.contains("exam_marks"));
+        assertTrue("Table 'attendance' exists", tables.contains("attendance"));
 
         // Error propagation test on closed connection
         Connection closedConn = javaconnect.getTestConnection(tempDbFile);
@@ -328,6 +332,129 @@ public class SecurityAndResilienceTest {
         assertTrue("Accepts strong admin authorization key", PasswordSecurity.validateAdminKeyStrength("AdminKey#2026".toCharArray()).valid);
     }
 
+    private void testSetupStatesAndInconsistencyDetection(Connection conn) throws SQLException {
+        // Clear both tables
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("DELETE FROM pass");
+            stmt.executeUpdate("DELETE FROM admin");
+        }
+
+        // 1. Both empty -> UNINITIALIZED
+        assertEquals("Empty database detects SetupState.UNINITIALIZED",
+                PasswordSecurity.SetupState.UNINITIALIZED, PasswordSecurity.getSetupState(conn));
+        assertTrue("isSetupRequired is true for UNINITIALIZED", PasswordSecurity.isSetupRequired(conn));
+
+        // 2. Users exist, but admin empty -> INCONSISTENT_MISSING_ADMIN
+        try (PreparedStatement pst = conn.prepareStatement("INSERT INTO pass (Username, Password) VALUES (?, ?)")) {
+            pst.setString(1, "temp_user");
+            pst.setString(2, PasswordSecurity.hashPassword("TempPass#2026".toCharArray()));
+            pst.executeUpdate();
+        }
+        assertEquals("Missing admin detects SetupState.INCONSISTENT_MISSING_ADMIN",
+                PasswordSecurity.SetupState.INCONSISTENT_MISSING_ADMIN, PasswordSecurity.getSetupState(conn));
+        assertTrue("isSetupRequired is false when missing admin (protects existing users)", !PasswordSecurity.isSetupRequired(conn));
+
+        // 3. Admin exists, but users empty -> INCONSISTENT_MISSING_USERS
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("DELETE FROM pass");
+        }
+        try (PreparedStatement pst = conn.prepareStatement("INSERT INTO admin (Password) VALUES (?)")) {
+            pst.setString(1, PasswordSecurity.hashPassword("MasterKey#2026".toCharArray()));
+            pst.executeUpdate();
+        }
+        assertEquals("Missing users detects SetupState.INCONSISTENT_MISSING_USERS",
+                PasswordSecurity.SetupState.INCONSISTENT_MISSING_USERS, PasswordSecurity.getSetupState(conn));
+        assertTrue("isSetupRequired is false when missing users (protects existing admin key)", !PasswordSecurity.isSetupRequired(conn));
+
+        // 4. Both exist -> INITIALIZED
+        try (PreparedStatement pst = conn.prepareStatement("INSERT INTO pass (Username, Password) VALUES (?, ?)")) {
+            pst.setString(1, "temp_user");
+            pst.setString(2, PasswordSecurity.hashPassword("TempPass#2026".toCharArray()));
+            pst.executeUpdate();
+        }
+        assertEquals("Both populated detects SetupState.INITIALIZED",
+                PasswordSecurity.SetupState.INITIALIZED, PasswordSecurity.getSetupState(conn));
+        assertTrue("isSetupRequired is false when INITIALIZED", !PasswordSecurity.isSetupRequired(conn));
+
+        // Clean up
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("DELETE FROM pass");
+            stmt.executeUpdate("DELETE FROM admin");
+        }
+    }
+
+    private void testCredentialPreservationAndRefusalToOverwrite(Connection conn) throws SQLException {
+        // Clean start
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("DELETE FROM pass");
+            stmt.executeUpdate("DELETE FROM admin");
+        }
+
+        char[] legitimatePwd = "LegitimateAdminPass#2026".toCharArray();
+        char[] legitimateKey = "LegitimateMasterKey#2026".toCharArray();
+
+        // 1. Initial creation
+        boolean initSuccess = PasswordSecurity.initializeFirstRunCredentials(conn, "legitimate_admin", legitimatePwd, legitimateKey);
+        assertTrue("Legitimate initial setup succeeds on clean DB", initSuccess);
+
+        String originalUserHash = null;
+        try (PreparedStatement pst = conn.prepareStatement("SELECT Password FROM pass WHERE Username = ?")) {
+            pst.setString(1, "legitimate_admin");
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) originalUserHash = rs.getString(1);
+            }
+        }
+        assertTrue("Original user hash exists", originalUserHash != null);
+
+        String originalAdminHash = null;
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT Password FROM admin LIMIT 1")) {
+            if (rs.next()) originalAdminHash = rs.getString(1);
+        }
+        assertTrue("Original admin hash exists", originalAdminHash != null);
+
+        // 2. Attack: Attempt to rerun setup with different attacker credentials
+        boolean threwOverwriteException = false;
+        try {
+            PasswordSecurity.initializeFirstRunCredentials(conn, "attacker_account", "AttackerPass#2026".toCharArray(), "AttackerKey#2026".toCharArray());
+        } catch (IllegalStateException e) {
+            threwOverwriteException = true;
+        }
+        assertTrue("Re-running setup when initialized throws IllegalStateException", threwOverwriteException);
+
+        // 3. Verify ZERO data modification: legitimate credentials are completely preserved
+        try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM pass WHERE Username = ?")) {
+            pst.setString(1, "attacker_account");
+            try (ResultSet rs = pst.executeQuery()) {
+                assertEquals("Attacker account was NOT created", 0, rs.next() ? rs.getInt(1) : -1);
+            }
+        }
+
+        try (PreparedStatement pst = conn.prepareStatement("SELECT Password FROM pass WHERE Username = ?")) {
+            pst.setString(1, "legitimate_admin");
+            try (ResultSet rs = pst.executeQuery()) {
+                assertTrue("Legitimate user still exists", rs.next());
+                assertEquals("Legitimate user password hash was NOT overwritten", originalUserHash, rs.getString(1));
+            }
+        }
+
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT Password FROM admin LIMIT 1")) {
+            assertTrue("Legitimate admin key still exists", rs.next());
+            assertEquals("Legitimate admin key was NOT overwritten", originalAdminHash, rs.getString(1));
+        }
+
+        // Verify total row counts
+        try (Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM pass")) {
+                assertEquals("pass table count remains exactly 1", 1, rs.next() ? rs.getInt(1) : -1);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM admin")) {
+                assertEquals("admin table count remains exactly 1", 1, rs.next() ? rs.getInt(1) : -1);
+            }
+        }
+    }
+
     private void testTransactionalFirstRunSetupAndRollback(Connection conn) throws SQLException {
         // Clear pass and admin for test
         try (Statement stmt = conn.createStatement()) {
@@ -355,9 +482,12 @@ public class SecurityAndResilienceTest {
         }
 
         // 2. Deliberately forced failure & transaction rollback test:
-        // Drop admin table temporarily to simulate failure on step 2 of setup
+        // Clear tables so DB is in clean uninitialized state
         try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("DROP TABLE admin");
+            stmt.executeUpdate("DELETE FROM pass");
+            stmt.executeUpdate("DELETE FROM admin");
+            // Create an abort trigger on admin to force a failure during step 2 inside the transaction
+            stmt.executeUpdate("CREATE TRIGGER fail_admin_insert BEFORE INSERT ON admin BEGIN SELECT RAISE(ABORT, 'Simulated admin insert failure'); END;");
         }
 
         boolean threwRollbackException = false;
@@ -376,10 +506,29 @@ public class SecurityAndResilienceTest {
             }
         }
 
-        // Restore admin table and verify retry works cleanly
-        DatabaseBootstrap.bootstrap(conn);
-        boolean retrySuccess = PasswordSecurity.initializeFirstRunCredentials(conn, "superadmin", adminPwd, adminKey);
+        // Drop trigger to restore admin table and verify retry works cleanly on uninitialized database
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("DROP TRIGGER IF EXISTS fail_admin_insert");
+        }
+        boolean retrySuccess = PasswordSecurity.initializeFirstRunCredentials(conn, "recovered_user", adminPwd, adminKey);
         assertTrue("Retry of first-run setup succeeds after schema recovery", retrySuccess);
+    }
+
+    private void testPBKDF2AuthenticationLatencyBenchmark() {
+        char[] testPwd = "BenchmarkPassword#2026".toCharArray();
+        long startHash = System.currentTimeMillis();
+        String hash = PasswordSecurity.hashPassword(testPwd);
+        long hashDuration = System.currentTimeMillis() - startHash;
+
+        long startVerify = System.currentTimeMillis();
+        boolean verified = PasswordSecurity.verifyPassword(testPwd, hash);
+        long verifyDuration = System.currentTimeMillis() - startVerify;
+
+        assertTrue("PBKDF2-HMAC-SHA256 (210,000 iterations) benchmark produced valid hash", hash != null && hash.startsWith("$pbkdf2-sha256$210000$"));
+        assertTrue("Benchmark hash verified successfully", verified);
+        assertTrue("Hash generation latency is within bounds (> 0ms and < 4000ms)", hashDuration > 0 && hashDuration < 4000);
+        assertTrue("Hash verification latency is within bounds (> 0ms and < 4000ms)", verifyDuration > 0 && verifyDuration < 4000);
+        System.out.printf("  [BENCHMARK] PBKDF2-HMAC-SHA256 (210,000 iter): Hash = %d ms, Verify = %d ms\n", hashDuration, verifyDuration);
     }
 
     private void testAdminParameterIndexIntegrity(Connection conn) throws SQLException {

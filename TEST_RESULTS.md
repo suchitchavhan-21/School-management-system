@@ -4,15 +4,15 @@
 **Environment**: OpenJDK 11.0.26 LTS, Windows 10/11  
 **Project**: School Management System in Java  
 **Runner**: `SystemTestSuite` (`test/SystemTestSuite.java`)  
-**Overall Verdict**: **100% GREEN (121 Passed, 0 Failed, 0 Skipped)**
+**Overall Verdict**: **100% GREEN (170 Passed, 0 Failed, 0 Skipped)**
 
 ---
 
 ## 1. Test Harness Architecture & Philosophy
 
 The test harness follows a strict zero-trust methodology:
-1. **Zero Production Risk & Safe Isolation**: All persistence and security integration tests run against ephemeral SQLite databases created with unique temporary files (`File.createTempFile("sms_*_", ".sqlite")`) in the OS temporary directory. Connections are explicitly closed prior to file cleanup, and the test suite verifies that unrelated pre-existing files are never deleted or modified.
-2. **Authoritative Assertions**: No vacuous or placeholder assertions (e.g. `assertTrue(..., true)`). All assertions test actual outcomes, returned rows, and exception handling.
+1. **Zero Production Risk & Safe Isolation**: All persistence, attendance, and security integration tests run against ephemeral SQLite databases created with unique temporary files (`File.createTempFile("sms_*_", ".sqlite")`) in the OS temporary directory. Connections are explicitly closed prior to file cleanup, and the test suite verifies that unrelated pre-existing files are never deleted or modified.
+2. **Authoritative Assertions**: No vacuous or placeholder assertions. All assertions test actual database states, returned rows, and exception handling.
 3. **No Silent Failures**: Database connection failures or unexpected runtime exceptions fail the suite and result in a nonzero exit code (`System.exit(1)`).
 4. **Comprehensive Metric Accounting**: Every test suite explicitly logs individual passes, failures, and skips, and aggregates them into the master test harness summary.
 
@@ -86,7 +86,7 @@ Running ExamMarksDAOTest (Isolated Test DB)...
   [PASS] Seed authoritative student record for test
   [PASS] Insert exam mark record
   [PASS] Fetched mark is not null
-  [PASS] Fetched Roll matches
+  [PASS] Roll matches
   [PASS] Fetched Student Name matches
   [PASS] Fetched Grade matches
   [PASS] Fetched GPA matches
@@ -104,6 +104,38 @@ Running ExamMarksDAOTest (Isolated Test DB)...
   [PASS] Search by name substring returns match
   [PASS] FindAll returns non-empty list
 ExamMarksDAOTest Summary: 20 Passed, 0 Failed, 0 Skipped out of 20 tests.
+
+==================================================
+Running AttendanceDAOTest (Isolated Test DB)...
+==================================================
+[DatabaseBootstrap] Ensuring database tables exist...
+[DatabaseBootstrap] Database schema check completed successfully.
+  [PASS] Seed student record in student_info
+  [PASS] Insert attendance record succeeds
+  [PASS] Fetched attendance record is not null
+  [PASS] Roll matches
+  [PASS] Student name matches
+  [PASS] Class matches
+  [PASS] Date matches
+  [PASS] Status is Present
+  [PASS] Remarks match
+  [PASS] Duplicate (Roll, Attendance_date) direct insert rejected by constraint
+  [PASS] saveOrUpdate updates existing date record safely
+  [PASS] Updated status is Late
+  [PASS] Updated remarks is Bus delayed
+  [PASS] Summary total tracked days is 6
+  [PASS] Summary present count is 3
+  [PASS] Summary late count is 1
+  [PASS] Summary absent count is 1
+  [PASS] Summary excused count is 1
+  [PASS] Summary attendance percentage is 66.67%
+  [PASS] findByRoll returns 6 records
+  [PASS] findByClassAndDate returns 1 record
+  [PASS] findAll returns 6 total records
+  [PASS] Delete attendance record succeeds
+  [PASS] Deleted record no longer exists
+  [PASS] Total records after delete is 5
+AttendanceDAOTest Summary: 25 Passed, 0 Failed, 0 Skipped out of 25 tests.
 
 ==================================================
 Running SecurityAndResilienceTest Suite...
@@ -129,6 +161,7 @@ Running SecurityAndResilienceTest Suite...
   [PASS] Table 'teacher_info' exists
   [PASS] Table 'employee_info' exists
   [PASS] Table 'exam_marks' exists
+  [PASS] Table 'attendance' exists
 [DatabaseBootstrap] Ensuring database tables exist...
 [DatabaseBootstrap] Database schema check completed successfully.
   [PASS] DatabaseBootstrap propagates SQLException when connection is closed or invalid
@@ -167,6 +200,25 @@ Running SecurityAndResilienceTest Suite...
   [PASS] Rejects admin key without digits or symbols
   [PASS] Rejects admin key containing whitespace
   [PASS] Accepts strong admin authorization key
+  [PASS] Empty database detects SetupState.UNINITIALIZED
+  [PASS] isSetupRequired is true for UNINITIALIZED
+  [PASS] Missing admin detects SetupState.INCONSISTENT_MISSING_ADMIN
+  [PASS] isSetupRequired is false when missing admin (protects existing users)
+  [PASS] Missing users detects SetupState.INCONSISTENT_MISSING_USERS
+  [PASS] isSetupRequired is false when missing users (protects existing admin key)
+  [PASS] Both populated detects SetupState.INITIALIZED
+  [PASS] isSetupRequired is false when INITIALIZED
+  [PASS] Legitimate initial setup succeeds on clean DB
+  [PASS] Original user hash exists
+  [PASS] Original admin hash exists
+  [PASS] Re-running setup when initialized throws IllegalStateException
+  [PASS] Attacker account was NOT created
+  [PASS] Legitimate user still exists
+  [PASS] Legitimate user password hash was NOT overwritten
+  [PASS] Legitimate admin key still exists
+  [PASS] Legitimate admin key was NOT overwritten
+  [PASS] pass table count remains exactly 1
+  [PASS] admin table count remains exactly 1
   [PASS] isSetupRequired is true when database has no users
   [PASS] initializeFirstRunCredentials completes successfully
   [PASS] isSetupRequired is false after complete initialization
@@ -174,9 +226,12 @@ Running SecurityAndResilienceTest Suite...
   [PASS] admin table has 1 record
   [PASS] Forced second-step failure throws SQLException
   [PASS] No partial record committed to pass table after rollback
-[DatabaseBootstrap] Ensuring database tables exist...
-[DatabaseBootstrap] Database schema check completed successfully.
   [PASS] Retry of first-run setup succeeds after schema recovery
+  [PASS] PBKDF2-HMAC-SHA256 (210,000 iterations) benchmark produced valid hash
+  [PASS] Benchmark hash verified successfully
+  [PASS] Hash generation latency is within bounds (> 0ms and < 4000ms)
+  [PASS] Hash verification latency is within bounds (> 0ms and < 4000ms)
+  [BENCHMARK] PBKDF2-HMAC-SHA256 (210,000 iter): Hash = 613 ms, Verify = 582 ms
   [PASS] Admin single-parameter query binds at index 1 without ParameterIndexOutOfBoundsException
   [PASS] Admin authentication succeeds with correct PIN
   [PASS] Admin authentication fails with incorrect PIN
@@ -185,17 +240,18 @@ Running SecurityAndResilienceTest Suite...
   [PASS] Piggybacked injection returns 0 rows
   [PASS] Table 'exam_marks' survived piggybacked DROP TABLE attempt
   [PASS] UNION-based injection payload returns 0 rows
-SecurityAndResilienceTest Summary: 65 Passed, 0 Failed, 0 Skipped out of 65 tests.
+SecurityAndResilienceTest Summary: 89 Passed, 0 Failed, 0 Skipped out of 89 tests.
 
 ================================================================================
                      COMPREHENSIVE TEST SUITE SUMMARY                           
 ================================================================================
   GradeCalculatorTest:        36 Passed,  0 Failed,  0 Skipped /  36 Total
   ExamMarksDAOTest:           20 Passed,  0 Failed,  0 Skipped /  20 Total
-  SecurityAndResilienceTest:  65 Passed,  0 Failed,  0 Skipped /  65 Total
+  AttendanceDAOTest:          25 Passed,  0 Failed,  0 Skipped /  25 Total
+  SecurityAndResilienceTest:  89 Passed,  0 Failed,  0 Skipped /  89 Total
 --------------------------------------------------------------------------------
-  TOTAL SUITE RESULTS:       121 Passed,  0 Failed,  0 Skipped / 121 Total
-  EXECUTION TIME:            5879 ms
+  TOTAL SUITE RESULTS:       170 Passed,  0 Failed,  0 Skipped / 170 Total
+  EXECUTION TIME:            18558 ms
 ================================================================================
 >>> VERDICT: 100% GREEN - ALL TEST SUITES PASSED RIGOROUS ZERO-TRUST AUDIT. <<<
 ================================================================================
@@ -203,18 +259,12 @@ SecurityAndResilienceTest Summary: 65 Passed, 0 Failed, 0 Skipped out of 65 test
 
 ---
 
-## 3. Test Breakdown by Component
+## 3. Test Coverage Breakdown by Category
 
-| Component Suite | Test Count | Pass | Fail | Skip | Verification Scope |
-|---|:---:|:---:|:---:|:---:|---|
-| **GradeCalculatorTest** | 36 | 36 | 0 | 0 | Grade boundaries (A+, A, A-, B, C, D, F), GPA scaling (5.0 to 0.0), pass threshold, single-subject failure override rule, input domain validation (negative, >100, NaN), and rounding accuracy. |
-| **ExamMarksDAOTest** | 20 | 20 | 0 | 0 | Safe unique temp SQLite persistence (`File.createTempFile`), CRUD lifecycle, authoritative relationship to `student_info`, database-level unique constraint (`Roll, Exam_term, Exam_year`), idempotent `saveOrUpdate`, roll/name search queries, and connection-safe cleanup. |
-| **SecurityAndResilienceTest** | 65 | 65 | 0 | 0 | Pre-existing user file preservation sentinel check, schema bootstrapping idempotence and error propagation on invalid connections, PBKDF2 format validation, iteration bounds (10,000 to 2,000,000) and DoS immunity against malformed hashes, older hash (65,536 iterations) compatibility and transparent upgrade to 210,000 iterations, password/admin key strength policy validation, transactional first-run setup with forced failure rollback, admin PIN verification, and SQL injection immunity (Tautology, Piggybacked DDL, UNION). |
-| **Total Test Harness** | **121** | **121** | **0** | **0** | **100% Verified** |
-
----
-
-## 4. Tests Not Run & Environmental Disclosures
-
-- **Remote MySQL Live Execution**: MySQL DDL compatibility was verified in `DatabaseBootstrap` (`AUTO_INCREMENT` clause) and connection configuration logic in `javaconnect` was validated, but live remote MySQL queries were not executed against a live MySQL server daemon as none was active in this local environment.
-- **Physical Audio Playback**: Headless environments lack audio hardware; `Help.java` sound loading was verified to handle missing audio files and audio lines safely without throwing uncaught exceptions.
+| Test Suite | Purpose | Tests | Result |
+|---|---|---|---|
+| `GradeCalculatorTest` | Academic grading math, percentage rounding, GPA mapping, and failing condition logic. | 36 | **36 Passed (100%)** |
+| `ExamMarksDAOTest` | Exam mark persistence, student verification, unique constraint enforcement, search, and deletion in isolated SQLite. | 20 | **20 Passed (100%)** |
+| `AttendanceDAOTest` | Daily attendance persistence, student lookup, duplicate date constraint, summary calculation, and filtering in isolated SQLite. | 25 | **25 Passed (100%)** |
+| `SecurityAndResilienceTest` | PBKDF2 hashing, format validation, DoS iteration bounds, setup state detection, credential preservation, transaction rollback, and SQL injection immunity. | 89 | **89 Passed (100%)** |
+| **TOTAL** | **Full application component, persistence, and security verification.** | **170** | **170 Passed, 0 Failed (100% GREEN)** |

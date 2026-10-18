@@ -299,25 +299,109 @@ public class PasswordSecurity {
         }
     }
 
+    public enum SetupState {
+        UNINITIALIZED,              // Both pass and admin tables have 0 rows: eligible for initial setup.
+        INITIALIZED,                // Both pass and admin tables have >= 1 rows: normal operation.
+        INCONSISTENT_MISSING_ADMIN, // pass has >= 1 rows, but admin has 0 rows: partial/inconsistent state.
+        INCONSISTENT_MISSING_USERS, // admin has >= 1 rows, but pass has 0 rows: partial/inconsistent state.
+        SCHEMA_ERROR,               // Table missing or SQL query failure.
+        INACCESSIBLE                // Connection is null or closed.
+    }
+
+    /**
+     * Inspects the database state to determine setup status and detect inconsistencies.
+     */
+    public static SetupState getSetupState(Connection conn) {
+        if (conn == null) return SetupState.INACCESSIBLE;
+        try {
+            if (conn.isClosed()) return SetupState.INACCESSIBLE;
+        } catch (SQLException e) {
+            return SetupState.INACCESSIBLE;
+        }
+
+        int passCount;
+        int adminCount;
+        try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM pass");
+             ResultSet rs = pst.executeQuery()) {
+            if (rs.next()) {
+                passCount = rs.getInt(1);
+            } else {
+                return SetupState.SCHEMA_ERROR;
+            }
+        } catch (SQLException e) {
+            return SetupState.SCHEMA_ERROR;
+        }
+
+        try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM admin");
+             ResultSet rs = pst.executeQuery()) {
+            if (rs.next()) {
+                adminCount = rs.getInt(1);
+            } else {
+                return SetupState.SCHEMA_ERROR;
+            }
+        } catch (SQLException e) {
+            return SetupState.SCHEMA_ERROR;
+        }
+
+        if (passCount == 0 && adminCount == 0) {
+            return SetupState.UNINITIALIZED;
+        } else if (passCount > 0 && adminCount > 0) {
+            return SetupState.INITIALIZED;
+        } else if (passCount > 0 && adminCount == 0) {
+            return SetupState.INCONSISTENT_MISSING_ADMIN;
+        } else {
+            return SetupState.INCONSISTENT_MISSING_USERS;
+        }
+    }
+
+    /**
+     * Checks if initial first-run setup is permitted (strictly only when completely uninitialized).
+     */
+    public static boolean isSetupRequired(Connection conn) {
+        return getSetupState(conn) == SetupState.UNINITIALIZED;
+    }
+
     /**
      * Atomically initializes both initial user and administrator credentials as a single transaction.
      * Ensures atomic commit and full rollback on failure, preserving connection auto-commit state.
+     * ZERO-TRUST: Never deletes or overwrites existing accounts or credentials.
      */
-    public static boolean initializeFirstRunCredentials(Connection conn, String username, char[] userPassword, char[] adminKey) throws SQLException {
-        if (conn == null || username == null || username.trim().isEmpty() || userPassword == null || adminKey == null) {
+    public static synchronized boolean initializeFirstRunCredentials(Connection conn, String username, char[] userPassword, char[] adminKey) throws SQLException {
+        if (conn == null || conn.isClosed()) {
+            throw new SQLException("Cannot initialize credentials: connection is null or closed.");
+        }
+        if (username == null || username.trim().isEmpty() || userPassword == null || adminKey == null) {
             return false;
+        }
+
+        // Zero-Trust Guard: Ensure setup is strictly permitted ONLY on genuinely uninitialized databases
+        SetupState state = getSetupState(conn);
+        if (state != SetupState.UNINITIALIZED) {
+            throw new IllegalStateException("First-run setup rejected: Database is not uninitialized (current state: " + state + "). Existing credentials and accounts will not be overwritten.");
         }
 
         boolean originalAutoCommit = conn.getAutoCommit();
         try {
             conn.setAutoCommit(false);
 
-            // Clean any partial setup records to ensure clean retry
-            try (PreparedStatement delPass = conn.prepareStatement("DELETE FROM pass WHERE Username = ?");
-                 PreparedStatement delAdmin = conn.prepareStatement("DELETE FROM admin")) {
-                delPass.setString(1, username.trim());
-                delPass.executeUpdate();
-                delAdmin.executeUpdate();
+            // Double-check user does not exist inside transaction
+            try (PreparedStatement checkUser = conn.prepareStatement("SELECT 1 FROM pass WHERE LOWER(Username) = LOWER(?)")) {
+                checkUser.setString(1, username.trim());
+                try (ResultSet rs = checkUser.executeQuery()) {
+                    if (rs.next()) {
+                        conn.rollback();
+                        throw new IllegalStateException("Account initialization failed: user '" + username.trim() + "' already exists.");
+                    }
+                }
+            }
+
+            // Double-check admin table is still empty
+            try (PreparedStatement checkAdmin = conn.prepareStatement("SELECT COUNT(*) FROM admin");
+                 ResultSet rs = checkAdmin.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    conn.rollback();
+                    throw new IllegalStateException("Account initialization failed: administrator credentials already exist.");
+                }
             }
 
             // Insert initial user
@@ -329,9 +413,9 @@ public class PasswordSecurity {
                 userRows = pst.executeUpdate();
             }
 
-            if (userRows <= 0) {
+            if (userRows != 1) {
                 conn.rollback();
-                return false;
+                throw new SQLException("Failed to insert user account: expected 1 row affected, got " + userRows);
             }
 
             // Insert administrator authorization key
@@ -342,14 +426,14 @@ public class PasswordSecurity {
                 adminRows = pst.executeUpdate();
             }
 
-            if (adminRows <= 0) {
+            if (adminRows != 1) {
                 conn.rollback();
-                return false;
+                throw new SQLException("Failed to insert administrator key: expected 1 row affected, got " + adminRows);
             }
 
             conn.commit();
             return true;
-        } catch (SQLException e) {
+        } catch (SQLException | RuntimeException e) {
             try {
                 conn.rollback();
             } catch (SQLException rollbackEx) {
@@ -360,29 +444,6 @@ public class PasswordSecurity {
             try {
                 conn.setAutoCommit(originalAutoCommit);
             } catch (SQLException ignored) {}
-        }
-    }
-
-    /**
-     * Checks if initial first-run setup is required (either user or admin credentials missing).
-     */
-    public static boolean isSetupRequired(Connection conn) {
-        if (conn == null) return false;
-        try {
-            int passCount = 0;
-            int adminCount = 0;
-            try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM pass");
-                 ResultSet rs = pst.executeQuery()) {
-                if (rs.next()) passCount = rs.getInt(1);
-            }
-            try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM admin");
-                 ResultSet rs = pst.executeQuery()) {
-                if (rs.next()) adminCount = rs.getInt(1);
-            }
-            return passCount == 0 || adminCount == 0;
-        } catch (SQLException e) {
-            System.err.println("[PasswordSecurity] Error checking setup requirement: " + e.getMessage());
-            return false;
         }
     }
 

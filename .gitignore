@@ -6,10 +6,18 @@ dist/*.jar
 # NetBeans user specific configuration
 nbproject/private/
 
-# Local databases
+# Local databases and journals
 *.sqlite
+*.sqlite3
+*.sqlite-journal
 *.db
+*.db-journal
+
+# Local Environment Secrets & Overrides
+database.properties.local
+*.local.properties
 
 # Temporary / Scratch
 scratch/
 *.log
+

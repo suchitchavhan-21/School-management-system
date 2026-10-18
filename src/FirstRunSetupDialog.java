@@ -122,6 +122,17 @@ public class FirstRunSetupDialog extends JDialog {
         char[] confirmAdminKey = txt_confirm_admin_key.getPassword();
 
         try {
+            // Guard: strictly ensure setup is only allowed on uninitialized installations
+            PasswordSecurity.SetupState state = PasswordSecurity.getSetupState(conn);
+            if (state != PasswordSecurity.SetupState.UNINITIALIZED) {
+                JOptionPane.showMessageDialog(this,
+                        "Initial setup is not permitted: The database is not in an uninitialized state (" + state + ").\n" +
+                        "Existing accounts and credentials are strictly protected and cannot be overwritten.",
+                        "Security Policy Violation", JOptionPane.ERROR_MESSAGE);
+                dispose();
+                return;
+            }
+
             if (username.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Administrator username cannot be blank.", "Validation Error", JOptionPane.ERROR_MESSAGE);
                 return;

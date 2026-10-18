@@ -104,8 +104,21 @@ public class DatabaseBootstrap {
                     "UNIQUE(Roll, Exam_term, Exam_year)" +
                     ")");
 
+            // 7. attendance table (Student Attendance Tracking Feature)
+            stmt.executeUpdate("CREATE TABLE IF NOT EXISTS attendance (" +
+                    "Attendance_id " + autoIncClause + ", " +
+                    "Roll INTEGER NOT NULL, " +
+                    "Student_name VARCHAR(100) NOT NULL, " +
+                    "Class INTEGER NOT NULL, " +
+                    "Attendance_date VARCHAR(20) NOT NULL, " +
+                    "Status VARCHAR(20) NOT NULL, " +
+                    "Remarks VARCHAR(100), " +
+                    "Created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "UNIQUE(Roll, Attendance_date)" +
+                    ")");
+
             // Rigorously verify that all required tables exist and can be queried
-            String[] requiredTables = {"pass", "admin", "student_info", "teacher_info", "employee_info", "exam_marks"};
+            String[] requiredTables = {"pass", "admin", "student_info", "teacher_info", "employee_info", "exam_marks", "attendance"};
             for (String table : requiredTables) {
                 try (Statement testStmt = conn.createStatement()) {
                     testStmt.execute("SELECT 1 FROM " + table + " LIMIT 1");
