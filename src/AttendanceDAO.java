@@ -3,15 +3,136 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Data Access Object for Student Daily Attendance Tracking.
  * Enforces parameterized SQL queries, unique (Roll, Attendance_date) constraints,
+ * student resolution against authoritative student_info, strict calendar date validation,
  * and reliable attendance summary analytics.
  */
 public class AttendanceDAO {
+
+    private static final DateTimeFormatter STRICT_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
+
+    public static final Set<String> VALID_STATUSES = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList("Present", "Absent", "Late", "Excused"))
+    );
+
+    public static boolean isValidCalendarDate(String dateStr) {
+        if (dateStr == null || dateStr.trim().length() != 10) return false;
+        try {
+            LocalDate.parse(dateStr.trim(), STRICT_DATE_FORMATTER);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    public static String normalizeStatus(String status) {
+        if (status == null) return null;
+        String trimmed = status.trim();
+        for (String valid : VALID_STATUSES) {
+            if (valid.equalsIgnoreCase(trimmed)) {
+                return valid;
+            }
+        }
+        return null;
+    }
+
+    public static class StudentInfoRecord {
+        public final int roll;
+        public final String fullName;
+        public final int studentClass;
+
+        public StudentInfoRecord(int roll, String fullName, int studentClass) {
+            this.roll = roll;
+            this.fullName = fullName;
+            this.studentClass = studentClass;
+        }
+    }
+
+    public static StudentInfoRecord resolveStudent(Connection conn, int roll) throws SQLException {
+        if (conn == null) throw new SQLException("Cannot resolve student: Database connection is null.");
+        String sql = "SELECT First_name, Last_name, Class FROM student_info WHERE Roll = ?";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, roll);
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    String first = rs.getString("First_name");
+                    String last = rs.getString("Last_name");
+                    String fullName = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+                    int cls = rs.getInt("Class");
+                    return new StudentInfoRecord(roll, fullName, cls);
+                }
+            }
+        }
+        return null;
+    }
+
+    public static void validateRecord(Connection conn, AttendanceRecord record) throws SQLException, IllegalArgumentException {
+        if (record == null) {
+            throw new IllegalArgumentException("Attendance record cannot be null.");
+        }
+        if (record.getRoll() <= 0) {
+            throw new IllegalArgumentException("Student Roll must be a positive integer.");
+        }
+
+        // 1. Validate Date as real calendar date
+        String dateStr = record.getAttendanceDate();
+        if (!isValidCalendarDate(dateStr)) {
+            throw new IllegalArgumentException("Invalid attendance date: '" + dateStr + "'. Date must be a valid calendar date in YYYY-MM-DD format.");
+        }
+        record.setAttendanceDate(dateStr.trim());
+
+        // 2. Validate Status
+        String normalizedStatus = normalizeStatus(record.getStatus());
+        if (normalizedStatus == null) {
+            throw new IllegalArgumentException("Invalid attendance status: '" + record.getStatus() + "'. Supported values are: Present, Absent, Late, Excused.");
+        }
+        record.setStatus(normalizedStatus);
+
+        // 3. Validate Remarks bounds
+        String remarks = record.getRemarks();
+        if (remarks != null && remarks.length() > 255) {
+            throw new IllegalArgumentException("Remarks exceed maximum allowed length of 255 characters.");
+        }
+
+        // 4. Resolve against student_info
+        StudentInfoRecord student = resolveStudent(conn, record.getRoll());
+        if (student == null) {
+            throw new IllegalArgumentException("Student Roll " + record.getRoll() + " does not exist in student database (student_info).");
+        }
+
+        // 5. Enforce Class match
+        if (record.getStudentClass() != student.studentClass) {
+            throw new IllegalArgumentException("Submitted class (" + record.getStudentClass() + ") does not match database record (" + student.studentClass + ") for Roll " + record.getRoll() + ".");
+        }
+
+        // 6. Check if submitted name disagrees with authoritative database record
+        String submittedName = record.getStudentName();
+        if (submittedName != null && !submittedName.trim().isEmpty()) {
+            String cleanSubmitted = submittedName.trim().replaceAll("\\s+", " ");
+            String cleanDbName = student.fullName.replaceAll("\\s+", " ");
+            if (!cleanSubmitted.equalsIgnoreCase(cleanDbName)) {
+                throw new IllegalArgumentException("Submitted student name ('" + submittedName + "') does not match database record ('" + student.fullName + "') for Roll " + record.getRoll() + ".");
+            }
+        }
+
+        // Treat database student record as authoritative for student name and class
+        record.setStudentName(student.fullName);
+        record.setStudentClass(student.studentClass);
+    }
 
     public static class AttendanceRecord {
         private int attendanceId;
@@ -93,7 +214,8 @@ public class AttendanceDAO {
     }
 
     public static boolean insert(Connection conn, AttendanceRecord record) throws SQLException {
-        if (conn == null || record == null) return false;
+        if (conn == null) throw new SQLException("Database connection is null.");
+        validateRecord(conn, record);
 
         String sql = "INSERT INTO attendance (Roll, Student_name, Class, Attendance_date, Status, Remarks) " +
                      "VALUES (?, ?, ?, ?, ?, ?)";
@@ -108,24 +230,37 @@ public class AttendanceDAO {
         }
     }
 
+    public static boolean update(Connection conn, AttendanceRecord record) throws SQLException {
+        if (conn == null) throw new SQLException("Database connection is null.");
+        validateRecord(conn, record);
+
+        String sql = "UPDATE attendance SET Student_name = ?, Class = ?, Status = ?, Remarks = ? " +
+                     "WHERE Roll = ? AND Attendance_date = ?";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, record.getStudentName());
+            pst.setInt(2, record.getStudentClass());
+            pst.setString(3, record.getStatus());
+            pst.setString(4, record.getRemarks() != null ? record.getRemarks() : "");
+            pst.setInt(5, record.getRoll());
+            pst.setString(6, record.getAttendanceDate());
+            return pst.executeUpdate() > 0;
+        }
+    }
+
     public static boolean saveOrUpdate(Connection conn, AttendanceRecord record) throws SQLException {
-        if (conn == null || record == null) return false;
+        if (conn == null) throw new SQLException("Database connection is null.");
+        validateRecord(conn, record);
 
         AttendanceRecord existing = findByRollAndDate(conn, record.getRoll(), record.getAttendanceDate());
         if (existing != null) {
-            String sql = "UPDATE attendance SET Student_name = ?, Class = ?, Status = ?, Remarks = ? " +
-                         "WHERE Roll = ? AND Attendance_date = ?";
-            try (PreparedStatement pst = conn.prepareStatement(sql)) {
-                pst.setString(1, record.getStudentName());
-                pst.setInt(2, record.getStudentClass());
-                pst.setString(3, record.getStatus());
-                pst.setString(4, record.getRemarks() != null ? record.getRemarks() : "");
-                pst.setInt(5, record.getRoll());
-                pst.setString(6, record.getAttendanceDate());
-                return pst.executeUpdate() > 0;
-            }
+            return update(conn, record);
         } else {
-            return insert(conn, record);
+            try {
+                return insert(conn, record);
+            } catch (SQLException e) {
+                // Fall back to update if concurrent insert race triggered unique constraint
+                return update(conn, record);
+            }
         }
     }
 

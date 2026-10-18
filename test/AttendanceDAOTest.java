@@ -182,5 +182,92 @@ public class AttendanceDAOTest {
         assertTrue("Delete attendance record succeeds", deleted);
         assertTrue("Deleted record no longer exists", AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-06") == null);
         assertEquals("Total records after delete is 5", 5, AttendanceDAO.findByRoll(conn, 201).size());
+
+        // 11. Unknown Roll number rejected
+        boolean unknownRollRejected = false;
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(999, "Unknown Student", 9, "2026-10-10", "Present", ""));
+        } catch (IllegalArgumentException e) {
+            unknownRollRejected = e.getMessage().contains("does not exist in student database");
+        }
+        assertTrue("Unknown student roll number rejected with descriptive error", unknownRollRejected);
+
+        // 12. Altered student name rejected
+        boolean alteredNameRejected = false;
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(201, "Altered Impostor", 9, "2026-10-10", "Present", ""));
+        } catch (IllegalArgumentException e) {
+            alteredNameRejected = e.getMessage().contains("does not match database record");
+        }
+        assertTrue("Altered student name disagreeing with student_info rejected", alteredNameRejected);
+
+        // 13. Altered class rejected
+        boolean alteredClassRejected = false;
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(201, "Daniel Miller", 12, "2026-10-10", "Present", ""));
+        } catch (IllegalArgumentException e) {
+            alteredClassRejected = e.getMessage().contains("Submitted class");
+        }
+        assertTrue("Altered student class disagreeing with student_info rejected", alteredClassRejected);
+
+        // 14. Impossible calendar dates rejected
+        String[] impossibleDates = {
+            "2026-02-31", // Feb 31 does not exist
+            "2026-04-31", // April has 30 days
+            "2026-13-01", // Month 13 does not exist
+            "2026-02-29", // 2026 is not a leap year
+            "2026/10/10", // Invalid delimiter
+            "2026-10-1",  // Truncated format
+            "not-a-date"  // Malformed text
+        };
+        for (String badDate : impossibleDates) {
+            boolean dateRejected = false;
+            try {
+                AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(201, "Daniel Miller", 9, badDate, "Present", ""));
+            } catch (IllegalArgumentException e) {
+                dateRejected = e.getMessage().contains("Invalid attendance date");
+            }
+            assertTrue("Impossible calendar date '" + badDate + "' rejected strictly", dateRejected);
+        }
+
+        // 15. Invalid attendance status rejected
+        String[] invalidStatuses = {"Suspended", "Presentt", "Expelled", "Unknown", ""};
+        for (String badStatus : invalidStatuses) {
+            boolean statusRejected = false;
+            try {
+                AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(201, "Daniel Miller", 9, "2026-10-10", badStatus, ""));
+            } catch (IllegalArgumentException e) {
+                statusRejected = e.getMessage().contains("Invalid attendance status");
+            }
+            assertTrue("Invalid status '" + badStatus + "' rejected", statusRejected);
+        }
+
+        // 16. Case-insensitive status normalized to Title Case
+        AttendanceDAO.AttendanceRecord lowerStatusRec = new AttendanceDAO.AttendanceRecord(
+                201, "Daniel Miller", 9, "2026-10-10", "present", "case test");
+        boolean lowerStatusInserted = AttendanceDAO.insert(conn, lowerStatusRec);
+        assertTrue("Insert with lowercase status succeeds", lowerStatusInserted);
+        AttendanceDAO.AttendanceRecord fetchedNormalized = AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-10");
+        assertEquals("Status normalized to canonical Title Case", "Present", fetchedNormalized.getStatus());
+
+        // 17. Excessive remarks length (> 255 chars) rejected
+        StringBuilder longRemarks = new StringBuilder();
+        for (int i = 0; i < 260; i++) longRemarks.append("A");
+        boolean longRemarksRejected = false;
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(201, "Daniel Miller", 9, "2026-10-11", "Present", longRemarks.toString()));
+        } catch (IllegalArgumentException e) {
+            longRemarksRejected = e.getMessage().contains("Remarks exceed maximum allowed length");
+        }
+        assertTrue("Remarks exceeding 255 characters rejected", longRemarksRejected);
+
+        // 18. Authoritative name and class populated when blank
+        AttendanceDAO.AttendanceRecord blankNameRec = new AttendanceDAO.AttendanceRecord(
+                201, "", 9, "2026-10-12", "Present", "Blank name auto-resolve");
+        boolean blankNameInserted = AttendanceDAO.insert(conn, blankNameRec);
+        assertTrue("Insert with blank name succeeds via student_info resolution", blankNameInserted);
+        AttendanceDAO.AttendanceRecord fetchedResolved = AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-12");
+        assertEquals("Authoritative name resolved from student_info", "Daniel Miller", fetchedResolved.getStudentName());
+        assertEquals("Authoritative class resolved from student_info", 9, fetchedResolved.getStudentClass());
     }
 }

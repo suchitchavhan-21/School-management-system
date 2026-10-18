@@ -107,6 +107,8 @@ public class Student_Attendance_System extends javax.swing.JFrame {
         formFields.add(new JLabel("Student Name:"), gbc);
         gbc.gridx = 1;
         txt_name = new JTextField(14);
+        txt_name.setEditable(false);
+        txt_name.setToolTipText("Resolved automatically from student database via Roll lookup");
         formFields.add(txt_name, gbc);
 
         // Class
@@ -114,6 +116,8 @@ public class Student_Attendance_System extends javax.swing.JFrame {
         formFields.add(new JLabel("Class / Grade:"), gbc);
         gbc.gridx = 1;
         txt_class = new JTextField(14);
+        txt_class.setEditable(false);
+        txt_class.setToolTipText("Resolved automatically from student database via Roll lookup");
         formFields.add(txt_class, gbc);
 
         // Attendance Date
@@ -269,20 +273,34 @@ public class Student_Attendance_System extends javax.swing.JFrame {
         String status = (String) combo_status.getSelectedItem();
         String remarks = txt_remarks.getText().trim();
 
-        if (rollStr.isEmpty() || name.isEmpty() || classStr.isEmpty() || date.isEmpty() || status == null) {
-            JOptionPane.showMessageDialog(this, "Please complete Roll, Name, Class, Date, and Status fields.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+        if (rollStr.isEmpty() || date.isEmpty() || status == null) {
+            JOptionPane.showMessageDialog(this, "Please enter Student Roll number and Date.", "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         try {
             int roll = Integer.parseInt(rollStr);
-            int studentClass = Integer.parseInt(classStr);
 
-            // Basic ISO date format validation: YYYY-MM-DD
-            if (!date.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                JOptionPane.showMessageDialog(this, "Date must follow YYYY-MM-DD format (e.g. 2026-10-18).", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            // Strict Calendar Date Validation
+            if (!AttendanceDAO.isValidCalendarDate(date)) {
+                JOptionPane.showMessageDialog(this, "Date '" + date + "' is not a valid calendar date in YYYY-MM-DD format (e.g. 2026-10-18).", "Validation Error", JOptionPane.WARNING_MESSAGE);
                 return;
             }
+
+            // If name or class is blank, auto-resolve from authoritative student_info table
+            if (name.isEmpty() || classStr.isEmpty()) {
+                AttendanceDAO.StudentInfoRecord student = AttendanceDAO.resolveStudent(conn, roll);
+                if (student == null) {
+                    JOptionPane.showMessageDialog(this, "Student Roll " + roll + " does not exist in student database (student_info).", "Student Not Found", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                name = student.fullName;
+                classStr = String.valueOf(student.studentClass);
+                txt_name.setText(name);
+                txt_class.setText(classStr);
+            }
+
+            int studentClass = Integer.parseInt(classStr);
 
             AttendanceDAO.AttendanceRecord record = new AttendanceDAO.AttendanceRecord(
                     roll, name, studentClass, date, status, remarks);
@@ -296,6 +314,8 @@ public class Student_Attendance_System extends javax.swing.JFrame {
             }
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this, "Roll and Class must be numeric integers.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, e.getMessage(), "Validation Error", JOptionPane.WARNING_MESSAGE);
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Database error saving attendance: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }

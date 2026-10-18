@@ -14,11 +14,11 @@
 |---|---|---|---|---|---|---|
 | **GradeCalculatorTest** | Academic grading, percentages, GPA 5.0 scale, subject rules | 36 | 36 | 0 | 0 | **100% PASS** |
 | **ExamMarksDAOTest** | CRUD, unique constraints, transactional persistence | 20 | 20 | 0 | 0 | **100% PASS** |
-| **AttendanceDAOTest** | Daily tracking, unique constraint, analytics calculation | 25 | 25 | 0 | 0 | **100% PASS** |
+| **AttendanceDAOTest** | Daily tracking, unique constraint, analytics, student_info integrity, strict dates, bounds | 46 | 46 | 0 | 0 | **100% PASS** |
 | **SecurityAndResilienceTest** | PBKDF2 hashing, DoS prevention, setup safety, SQL injection | 89 | 89 | 0 | 0 | **100% PASS** |
-| **TOTAL** | **Entire Application Verification** | **170** | **170** | **0** | **0** | **100% PASS** |
+| **TOTAL** | **Entire Application Verification** | **191** | **191** | **0** | **0** | **100% PASS** |
 
-- **Total Execution Time**: ~11,513 ms (~11.5 seconds)
+- **Total Execution Time**: ~8,752 ms (~8.7 seconds)
 - **Exit Code**: `0`
 
 ---
@@ -124,7 +124,28 @@ Running AttendanceDAOTest (Isolated Test DB)...
   [PASS] Delete attendance record succeeds
   [PASS] Deleted record no longer exists
   [PASS] Total records after delete is 5
-AttendanceDAOTest Summary: 25 Passed, 0 Failed, 0 Skipped out of 25 tests.
+  [PASS] Unknown student roll number rejected with descriptive error
+  [PASS] Altered student name disagreeing with student_info rejected
+  [PASS] Altered student class disagreeing with student_info rejected
+  [PASS] Impossible calendar date '2026-02-31' rejected strictly
+  [PASS] Impossible calendar date '2026-04-31' rejected strictly
+  [PASS] Impossible calendar date '2026-13-01' rejected strictly
+  [PASS] Impossible calendar date '2026-02-29' rejected strictly
+  [PASS] Impossible calendar date '2026/10/10' rejected strictly
+  [PASS] Impossible calendar date '2026-10-1' rejected strictly
+  [PASS] Impossible calendar date 'not-a-date' rejected strictly
+  [PASS] Invalid status 'Suspended' rejected
+  [PASS] Invalid status 'Presentt' rejected
+  [PASS] Invalid status 'Expelled' rejected
+  [PASS] Invalid status 'Unknown' rejected
+  [PASS] Invalid status '' rejected
+  [PASS] Insert with lowercase status succeeds
+  [PASS] Status normalized to canonical Title Case
+  [PASS] Remarks exceeding 255 characters rejected
+  [PASS] Insert with blank name succeeds via student_info resolution
+  [PASS] Authoritative name resolved from student_info
+  [PASS] Authoritative class resolved from student_info
+AttendanceDAOTest Summary: 46 Passed, 0 Failed, 0 Skipped out of 46 tests.
 
 ==================================================
 Running SecurityAndResilienceTest Suite...
@@ -236,11 +257,11 @@ SecurityAndResilienceTest Summary: 89 Passed, 0 Failed, 0 Skipped out of 89 test
 ================================================================================
   GradeCalculatorTest:        36 Passed,  0 Failed,  0 Skipped /  36 Total
   ExamMarksDAOTest:           20 Passed,  0 Failed,  0 Skipped /  20 Total
-  AttendanceDAOTest:          25 Passed,  0 Failed,  0 Skipped /  25 Total
+  AttendanceDAOTest:          46 Passed,  0 Failed,  0 Skipped /  46 Total
   SecurityAndResilienceTest:  89 Passed,  0 Failed,  0 Skipped /  89 Total
 --------------------------------------------------------------------------------
-  TOTAL SUITE RESULTS:       170 Passed,  0 Failed,  0 Skipped / 170 Total
-  EXECUTION TIME:            11513 ms
+  TOTAL SUITE RESULTS:       191 Passed,  0 Failed,  0 Skipped / 191 Total
+  EXECUTION TIME:            8752 ms
 ================================================================================
 >>> VERDICT: 100% GREEN - ALL TEST SUITES PASSED RIGOROUS ZERO-TRUST AUDIT. <<<
 ================================================================================
