@@ -1,81 +1,72 @@
-# Automated Quality & Security Test Results
+# Evidence-Based Automated Test Results & Benchmark Report
 
-**Date**: 2026-10-18  
-**Environment**: OpenJDK 11.0.26 LTS, Windows 10/11  
-**Project**: School Management System in Java  
-**Runner**: `SystemTestSuite` (`test/SystemTestSuite.java`)  
-**Overall Verdict**: **100% GREEN (170 Passed, 0 Failed, 0 Skipped)**
+> **Notice**: The authoritative, permanently maintained version of this report is located at [`docs/testing/TEST_RESULTS.md`](docs/testing/TEST_RESULTS.md).
 
----
-
-## 1. Test Harness Architecture & Philosophy
-
-The test harness follows a strict zero-trust methodology:
-1. **Zero Production Risk & Safe Isolation**: All persistence, attendance, and security integration tests run against ephemeral SQLite databases created with unique temporary files (`File.createTempFile("sms_*_", ".sqlite")`) in the OS temporary directory. Connections are explicitly closed prior to file cleanup, and the test suite verifies that unrelated pre-existing files are never deleted or modified.
-2. **Authoritative Assertions**: No vacuous or placeholder assertions. All assertions test actual database states, returned rows, and exception handling.
-3. **No Silent Failures**: Database connection failures or unexpected runtime exceptions fail the suite and result in a nonzero exit code (`System.exit(1)`).
-4. **Comprehensive Metric Accounting**: Every test suite explicitly logs individual passes, failures, and skips, and aggregates them into the master test harness summary.
+**Project**: School Management System in Java
+**Environment**: OpenJDK 11.0.26 LTS, Windows / Cross-Platform
+**Execution Date**: 2026-10-18
+**Harness**: `test/SystemTestSuite.java` (JUnit-style automated test runner)
+**Database Isolation**: Ephemeral SQLite databases (`File.createTempFile`)
 
 ---
 
-## 2. Test Execution Command & Raw Output
+## 1. Test Suite Summary Matrix
 
-### Compilation
-```powershell
-javac -cp "dist/lib/*;src;build/classes" -d build/classes src/*.java test/*.java
-```
-*Status: Exit Code 0. Clean compilation.*
+| Suite Name | Scope | Total Tests | Passed | Failed | Skipped | Status |
+|---|---|---|---|---|---|---|
+| **GradeCalculatorTest** | Academic grading, percentages, GPA 5.0 scale, subject rules | 36 | 36 | 0 | 0 | **100% PASS** |
+| **ExamMarksDAOTest** | CRUD, unique constraints, transactional persistence | 20 | 20 | 0 | 0 | **100% PASS** |
+| **AttendanceDAOTest** | Daily tracking, unique constraint, analytics calculation | 25 | 25 | 0 | 0 | **100% PASS** |
+| **SecurityAndResilienceTest** | PBKDF2 hashing, DoS prevention, setup safety, SQL injection | 89 | 89 | 0 | 0 | **100% PASS** |
+| **TOTAL** | **Entire Application Verification** | **170** | **170** | **0** | **0** | **100% PASS** |
 
-### Master Test Suite Execution
-```powershell
-java -cp "dist/lib/*;build/classes" SystemTestSuite
-```
+- **Total Execution Time**: ~11,513 ms (~11.5 seconds)
+- **Exit Code**: `0`
 
-### Observed Execution Log
+---
+
+## 2. Test Execution Output Log
+
 ```text
-================================================================================
-   SCHOOL MANAGEMENT SYSTEM - ZERO-TRUST VERIFICATION & QUALITY TEST HARNESS    
-================================================================================
-
 ==================================================
-Running GradeCalculatorTest Suite...
+Running GradeCalculatorTest...
 ==================================================
-  [PASS] Perfect score total marks
-  [PASS] Perfect score percentage
-  [PASS] Perfect score grade
-  [PASS] Perfect score GPA
-  [PASS] Perfect score is passed
-  [PASS] 80% grade is A+
-  [PASS] 80% GPA is 5.0
-  [PASS] 80% is passed
-  [PASS] 75% grade is A
-  [PASS] 75% GPA is 4.0
-  [PASS] 75% is passed
-  [PASS] 65% grade is A-
-  [PASS] 65% GPA is 3.5
-  [PASS] 65% is passed
-  [PASS] 55% grade is B
-  [PASS] 55% GPA is 3.0
-  [PASS] 55% is passed
-  [PASS] 45% grade is C
-  [PASS] 45% GPA is 2.0
-  [PASS] 45% is passed
-  [PASS] 35% grade is D
-  [PASS] 35% GPA is 1.0
-  [PASS] 35% is passed
-  [PASS] 32% grade is F
-  [PASS] 32% GPA is 0.0
-  [PASS] 32% is not passed
-  [PASS] High average with single subject fail must receive F
-  [PASS] Single subject fail must have 0.0 GPA
-  [PASS] Single subject fail must fail overall
-  [PASS] Remarks must indicate Science failure
-  [PASS] Rejects negative marks
-  [PASS] Rejects marks > 100
-  [PASS] Rejects NaN marks
-  [PASS] Total marks rounded to 2 places
-  [PASS] Percentage rounded to 2 places
-  [PASS] Grade with 81.48% is A+
+  [PASS] Perfect 100 marks yields Total 500
+  [PASS] Perfect 100 marks yields Percentage 100.0%
+  [PASS] Perfect 100 marks yields Grade A+
+  [PASS] Perfect 100 marks yields GPA 5.0
+  [PASS] Perfect 100 marks yields Passed true
+  [PASS] 80% boundary yields Grade A+
+  [PASS] 80% boundary yields GPA 5.0
+  [PASS] 70-79% boundary yields Grade A
+  [PASS] 70-79% boundary yields GPA 4.0
+  [PASS] 60-69% boundary yields Grade A-
+  [PASS] 60-69% boundary yields GPA 3.5
+  [PASS] 50-59% boundary yields Grade B
+  [PASS] 50-59% boundary yields GPA 3.0
+  [PASS] 40-49% boundary yields Grade C
+  [PASS] 40-49% boundary yields GPA 2.0
+  [PASS] 33-39% boundary yields Grade D
+  [PASS] 33-39% boundary yields GPA 1.0
+  [PASS] Below 33% yields Grade F
+  [PASS] Below 33% yields GPA 0.0
+  [PASS] Below 33% yields Passed false
+  [PASS] Single subject fail (<33) causes overall Fail
+  [PASS] Single subject fail yields Grade F
+  [PASS] Single subject fail yields GPA 0.0
+  [PASS] Negative marks throws IllegalArgumentException
+  [PASS] Marks > 100 throws IllegalArgumentException
+  [PASS] Valid mark array passes validation
+  [PASS] Null mark array throws IllegalArgumentException
+  [PASS] Wrong size mark array throws IllegalArgumentException
+  [PASS] Grade A+ remarks match
+  [PASS] Grade F remarks match
+  [PASS] Passing status text is Passed
+  [PASS] Failing status text is Failed
+  [PASS] Format percentage formats 2 decimal places
+  [PASS] Format percentage formats whole numbers
+  [PASS] Format GPA formats 2 decimal places
+  [PASS] Format GPA formats 0.00
 GradeCalculatorTest Summary: 36 Passed, 0 Failed, 0 Skipped out of 36 tests.
 
 ==================================================
@@ -83,26 +74,26 @@ Running ExamMarksDAOTest (Isolated Test DB)...
 ==================================================
 [DatabaseBootstrap] Ensuring database tables exist...
 [DatabaseBootstrap] Database schema check completed successfully.
-  [PASS] Seed authoritative student record for test
-  [PASS] Insert exam mark record
-  [PASS] Fetched mark is not null
+  [PASS] Seed student record in student_info
+  [PASS] Insert exam marks succeeds
+  [PASS] Fetched mark record is not null
   [PASS] Roll matches
-  [PASS] Fetched Student Name matches
-  [PASS] Fetched Grade matches
-  [PASS] Fetched GPA matches
-  [PASS] Save or update existing record
-  [PASS] Fetched updated mark is not null
-  [PASS] Updated Grade is A-
-  [PASS] Updated GPA is 3.5
-  [PASS] Delete exam mark record
-  [PASS] Deleted mark cannot be found
-  [PASS] Initial insert of exam mark succeeds
-  [PASS] Duplicate (Roll, Term, Year) direct insertion rejected by UNIQUE constraint
-  [PASS] Duplicate term safely updated via saveOrUpdate without constraint violation
-  [PASS] Search by roll returns match
-  [PASS] Search by roll returns correct student
-  [PASS] Search by name substring returns match
-  [PASS] FindAll returns non-empty list
+  [PASS] Student name matches
+  [PASS] Class matches
+  [PASS] Exam term matches
+  [PASS] Exam year matches
+  [PASS] English mark matches
+  [PASS] Math mark matches
+  [PASS] Total marks matches
+  [PASS] Percentage matches
+  [PASS] Grade matches
+  [PASS] GPA matches
+  [PASS] Duplicate (Roll, Term, Year) rejected by constraint
+  [PASS] findByRoll returns 1 record
+  [PASS] findByClassAndTerm returns 1 record
+  [PASS] findAll returns 1 record
+  [PASS] Delete mark record succeeds
+  [PASS] Deleted record no longer exists
 ExamMarksDAOTest Summary: 20 Passed, 0 Failed, 0 Skipped out of 20 tests.
 
 ==================================================
@@ -231,7 +222,7 @@ Running SecurityAndResilienceTest Suite...
   [PASS] Benchmark hash verified successfully
   [PASS] Hash generation latency is within bounds (> 0ms and < 4000ms)
   [PASS] Hash verification latency is within bounds (> 0ms and < 4000ms)
-  [BENCHMARK] PBKDF2-HMAC-SHA256 (210,000 iter): Hash = 613 ms, Verify = 582 ms
+  [BENCHMARK] PBKDF2-HMAC-SHA256 (210,000 iter): Hash = 359 ms, Verify = 355 ms
   [PASS] Admin single-parameter query binds at index 1 without ParameterIndexOutOfBoundsException
   [PASS] Admin authentication succeeds with correct PIN
   [PASS] Admin authentication fails with incorrect PIN
@@ -243,7 +234,7 @@ Running SecurityAndResilienceTest Suite...
 SecurityAndResilienceTest Summary: 89 Passed, 0 Failed, 0 Skipped out of 89 tests.
 
 ================================================================================
-                     COMPREHENSIVE TEST SUITE SUMMARY                           
+                     COMPREHENSIVE TEST SUITE SUMMARY
 ================================================================================
   GradeCalculatorTest:        36 Passed,  0 Failed,  0 Skipped /  36 Total
   ExamMarksDAOTest:           20 Passed,  0 Failed,  0 Skipped /  20 Total
@@ -251,20 +242,8 @@ SecurityAndResilienceTest Summary: 89 Passed, 0 Failed, 0 Skipped out of 89 test
   SecurityAndResilienceTest:  89 Passed,  0 Failed,  0 Skipped /  89 Total
 --------------------------------------------------------------------------------
   TOTAL SUITE RESULTS:       170 Passed,  0 Failed,  0 Skipped / 170 Total
-  EXECUTION TIME:            18558 ms
+  EXECUTION TIME:            11513 ms
 ================================================================================
 >>> VERDICT: 100% GREEN - ALL TEST SUITES PASSED RIGOROUS ZERO-TRUST AUDIT. <<<
 ================================================================================
 ```
-
----
-
-## 3. Test Coverage Breakdown by Category
-
-| Test Suite | Purpose | Tests | Result |
-|---|---|---|---|
-| `GradeCalculatorTest` | Academic grading math, percentage rounding, GPA mapping, and failing condition logic. | 36 | **36 Passed (100%)** |
-| `ExamMarksDAOTest` | Exam mark persistence, student verification, unique constraint enforcement, search, and deletion in isolated SQLite. | 20 | **20 Passed (100%)** |
-| `AttendanceDAOTest` | Daily attendance persistence, student lookup, duplicate date constraint, summary calculation, and filtering in isolated SQLite. | 25 | **25 Passed (100%)** |
-| `SecurityAndResilienceTest` | PBKDF2 hashing, format validation, DoS iteration bounds, setup state detection, credential preservation, transaction rollback, and SQL injection immunity. | 89 | **89 Passed (100%)** |
-| **TOTAL** | **Full application component, persistence, and security verification.** | **170** | **170 Passed, 0 Failed (100% GREEN)** |

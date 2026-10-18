@@ -36,30 +36,17 @@ public class All_Teachers_data_details extends javax.swing.JFrame {
         private void Update_table()
     {
         
-        try {
-             String sql="select * from teacher_info";
-         
-             pst=conn.prepareStatement(sql);
-             rs=pst.executeQuery();
-             
-             Table_student.setModel(DbUtils.resultSetToTableModel(rs));
-           
-  
-            
-        } catch (Exception e) {
-           JOptionPane.showMessageDialog(null, "It is not connceted.");
-       
-            
-            
+        if (conn == null) {
+            JOptionPane.showMessageDialog(this, "Database connection is not available.", "Database Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        
-        finally
-        {   
-            try {
-                rs.close();
-                pst.close();
-            } catch (Exception e) {
-            }
+        String sql = "SELECT * FROM teacher_info";
+        try (PreparedStatement pst = conn.prepareStatement(sql);
+             ResultSet rs = pst.executeQuery()) {
+            Table_student.setModel(DbUtils.resultSetToTableModel(rs));
+        } catch (Exception e) {
+            System.err.println("[All_Teachers_data_details] Error loading table: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, "Unable to load teacher table data. Please check database connection.", "Database Error", JOptionPane.ERROR_MESSAGE);
         }
         
  

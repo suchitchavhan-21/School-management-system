@@ -42,30 +42,17 @@ public class All_Employees_Data_Details extends javax.swing.JFrame {
         public void Update_table()
     {
         
-        try {
-             String sql="select * from employee_info";
-         
-             pst=conn.prepareStatement(sql);
-             rs=pst.executeQuery();
-             
-             Table_student.setModel(DbUtils.resultSetToTableModel(rs));
-           
-  
-            
-        } catch (Exception e) {
-           JOptionPane.showMessageDialog(null, "It is not connceted.");
-       
-            
-            
+        if (conn == null) {
+            JOptionPane.showMessageDialog(this, "Database connection is not available.", "Database Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        
-        finally
-        {   
-            try {
-                rs.close();
-                pst.close();
-            } catch (Exception e) {
-            }
+        String sql = "SELECT * FROM employee_info";
+        try (PreparedStatement pst = conn.prepareStatement(sql);
+             ResultSet rs = pst.executeQuery()) {
+            Table_student.setModel(DbUtils.resultSetToTableModel(rs));
+        } catch (Exception e) {
+            System.err.println("[All_Employees_Data_Details] Error loading table: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, "Unable to load employee table data. Please check database connection.", "Database Error", JOptionPane.ERROR_MESSAGE);
         }
         
  

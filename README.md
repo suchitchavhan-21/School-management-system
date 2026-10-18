@@ -1,6 +1,6 @@
 # School Management System (Java Swing & JDBC)
 
-An enterprise-hardened School Management System built in Java Swing, backed by robust JDBC persistence (SQLite / MySQL) with automated examination grading, daily attendance tracking, and zero-trust security controls.
+An enterprise-hardened School Management System built in Java Swing, backed by robust JDBC persistence (SQLite / MySQL) with automated examination grading, daily attendance tracking, production-grade repository organization, CI/CD, and zero-trust security controls.
 
 ---
 
@@ -29,7 +29,7 @@ An enterprise-hardened School Management System built in Java Swing, backed by r
   - Search by ID, name, and attributes.
   - Dedicated database overview tables with tabular data viewing.
 - **Database Architecture & Resilience**:
-  - Configurable database backend via `database.properties` (SQLite embedded by default; MySQL supported).
+  - Dual-engine support: Standalone embedded SQLite (default) and enterprise network MySQL.
   - 12-Factor environment variable overrides supported (`SMS_DB_TYPE`, `SMS_MYSQL_HOST`, `SMS_MYSQL_PORT`, `SMS_MYSQL_DATABASE`, `SMS_MYSQL_USER`, `SMS_MYSQL_PASSWORD`, `SMS_MYSQL_USE_SSL`).
   - Strict security validation: MySQL requires dedicated user credentials and prohibits running with `root` and a blank password.
   - Dialect-aware schema bootstrapping with zero hardcoded default credentials (`DatabaseBootstrap.java`).
@@ -38,35 +38,81 @@ An enterprise-hardened School Management System built in Java Swing, backed by r
 
 ---
 
-## 2. Prerequisites
+## 2. Production-Grade Repository Organization
 
-- **Java Development Kit (JDK)**: OpenJDK 11 or higher (tested on OpenJDK 11.0.26 LTS).
-- **Operating System**: Windows, Linux, or macOS.
-- **IDE (Optional)**: Apache NetBeans 12+ (standard Ant project structure).
+```text
+School Management system in java/
+├── .github/workflows/         # CI/CD pipelines (GitHub Actions Java 11 matrix)
+├── config/                    # Configuration templates and 12-factor guidelines
+├── Database/
+│   ├── migrations/            # Schema migration guidance and evolution policies
+│   ├── schema/                # Production DDL for SQLite and MySQL
+│   └── student_database.sql   # Reference baseline SQL dump
+├── dist/lib/                  # Bundled runtime libraries (JDBC drivers, UI bindings)
+├── docs/
+│   ├── architecture/          # Repository structure & architectural specifications
+│   ├── audit/                 # Baseline verification, audit registers, final reports
+│   ├── security/              # Cryptographic architecture & remediation guides
+│   └── testing/               # Evidence-based test logs & benchmark reports
+├── help center/               # Graphical user guide & documentation
+├── nbproject/                 # NetBeans Ant configuration & metadata
+├── scripts/                   # Automation scripts (build.ps1, test.ps1, run.ps1, verify-repository.ps1)
+├── src/                       # Application source code & NetBeans GUI Builder .form files
+├── test/                      # Comprehensive zero-trust test suite (170 tests)
+├── .gitattributes             # Line ending normalization & binary attributes
+├── .gitignore                 # Build and secret ignore rules
+├── CHANGELOG.md               # Version history and milestone documentation
+├── CONTRIBUTING.md            # Contributor guidelines and coding standards
+├── README.md                  # This file
+└── SECURITY.md                # Enterprise security policy & disclosure procedures
+```
 
 ---
 
-## 3. Build & Execution Instructions
+## 3. Quickstart & Build Instructions
 
-### A. Compile from Command Line
+### Prerequisites
+- **Java Development Kit (JDK)**: OpenJDK 11 LTS or higher (tested on OpenJDK 11.0.26 LTS).
+- **PowerShell** (Windows) or standard Bash shell (Linux/macOS).
+- **IDE (Optional)**: Apache NetBeans, IntelliJ IDEA, Eclipse, or VS Code.
+
+### A. Build the Application
 ```powershell
-javac -cp "dist/lib/*;src;build/classes" -d build/classes src/*.java test/*.java
+# Using PowerShell automation script:
+.\scripts\build.ps1
+
+# Or directly using javac:
+javac -encoding UTF-8 -cp "dist/lib/*;src" -d build/classes src/*.java test/*.java
 ```
 
-### B. Run the Master Automated Test Suite
+### B. Execute the Automated Test Suite
 ```powershell
+# Using PowerShell automation script:
+.\scripts\test.ps1
+
+# Or directly using java:
 java -cp "dist/lib/*;build/classes" SystemTestSuite
 ```
-*Executes all 170 automated unit, persistence, attendance, and security resilience tests with 100% pass verification.*
+*Executes all 170 automated unit, integration, and security resilience tests with 100% pass verification.*
 
-### C. Launch the Application
+### C. Verify Repository Integrity
 ```powershell
+# Comprehensive zero-trust validation:
+.\scripts\verify-repository.ps1
+```
+
+### D. Launch the Application
+```powershell
+# Using PowerShell automation script:
+.\scripts\run.ps1
+
+# Or directly using java:
 java -cp "dist/lib/*;build/classes" Login_frame
 ```
 
 ---
 
-## 4. Configuration (`database.properties` & Environment Variables)
+## 4. Configuration (`config/database.properties.template`)
 
 The database connection is configured via `database.properties` or environment variables:
 
@@ -85,14 +131,19 @@ db.mysql.password=
 db.mysql.useSSL=true
 ```
 
-For production MySQL deployments, refer to [`database.properties.template`](file:///C:/School%20Management%20system%20in%20java/database.properties.template).
+For full details on configuring network databases, refer to [`config/README.md`](config/README.md) and [`config/database.properties.template`](config/database.properties.template).
 
 ---
 
-## 5. Security & Verification Documentation
+## 5. Technical Documentation Links
 
-For comprehensive technical reports and audit logs, consult:
-- [`SECURITY_REMEDIATION.md`](file:///C:/School%20Management%20system%20in%20java/SECURITY_REMEDIATION.md): Detailed cryptographic specifications and security architecture.
-- [`TEST_RESULTS.md`](file:///C:/School%20Management%20system%20in%20java/TEST_RESULTS.md): Full automated test suite breakdown and execution logs (170 tests).
-- [`ZERO_TRUST_AUDIT_REGISTER.md`](file:///C:/School%20Management%20system%20in%20java/ZERO_TRUST_AUDIT_REGISTER.md): File-by-file audit findings and remediation status.
-- [`FINAL_COMPLETION_REPORT.md`](file:///C:/School%20Management%20system%20in%20java/FINAL_COMPLETION_REPORT.md): Executive summary and verification delivery details.
+- **Architecture**: [`docs/architecture/REPOSITORY_STRUCTURE.md`](docs/architecture/REPOSITORY_STRUCTURE.md)
+- **Baseline Audit**: [`docs/audit/BASELINE.md`](docs/audit/BASELINE.md)
+- **Audit Register**: [`docs/audit/ZERO_TRUST_AUDIT_REGISTER.md`](docs/audit/ZERO_TRUST_AUDIT_REGISTER.md)
+- **Completion Report**: [`docs/audit/FINAL_COMPLETION_REPORT.md`](docs/audit/FINAL_COMPLETION_REPORT.md)
+- **Security Architecture**: [`docs/security/SECURITY_REMEDIATION.md`](docs/security/SECURITY_REMEDIATION.md)
+- **Test Evidence & Benchmarks**: [`docs/testing/TEST_RESULTS.md`](docs/testing/TEST_RESULTS.md)
+- **Database DDL**: [`Database/schema/schema-sqlite.sql`](Database/schema/schema-sqlite.sql) & [`Database/schema/schema-mysql.sql`](Database/schema/schema-mysql.sql)
+- **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Security Policy**: [`SECURITY.md`](SECURITY.md)
+- **Changelog**: [`CHANGELOG.md`](CHANGELOG.md)

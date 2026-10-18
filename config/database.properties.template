@@ -1,0 +1,51 @@
+# ==============================================================================
+# School Management System - Database Configuration Template
+# ==============================================================================
+# Copy this file to 'database.properties' or 'database.properties.local'
+# for your environment. Never commit real production credentials to version control.
+#
+# Supported Database Engines:
+#   1. sqlite : Embedded local database (recommended for local development and testing)
+#   2. mysql  : Enterprise network database (recommended for multi-user deployments)
+# ==============================================================================
+
+# Database Engine Selection: 'sqlite' or 'mysql'
+db.type=sqlite
+
+# ------------------------------------------------------------------------------
+# SQLite Configuration (Active when db.type=sqlite)
+# ------------------------------------------------------------------------------
+# Path to local SQLite database file.
+# Note: SQLite files are automatically ignored by .gitignore to prevent accidental commit.
+db.sqlite.file=student_database.sqlite
+
+# ------------------------------------------------------------------------------
+# MySQL Configuration (Active when db.type=mysql)
+# ------------------------------------------------------------------------------
+# Network Database Connection Parameters:
+db.mysql.host=localhost
+db.mysql.port=3306
+db.mysql.database=student_database
+
+# SECURITY NOTICE FOR MYSQL DEPLOYMENTS:
+# 1. Do NOT use the MySQL 'root' user or an empty password.
+# 2. Provision a dedicated least-privilege user account on the MySQL server:
+#      CREATE USER 'sms_user'@'%' IDENTIFIED BY 'StrongPasswordHere#123';
+#      GRANT SELECT, INSERT, UPDATE, DELETE ON student_database.* TO 'sms_user'@'%';
+#      FLUSH PRIVILEGES;
+# 3. Environment variables can be used instead of storing secrets in this file:
+#      export SMS_DB_TYPE=mysql
+#      export SMS_MYSQL_HOST=db.internal.school.edu
+#      export SMS_MYSQL_PORT=3306
+#      export SMS_MYSQL_DATABASE=student_database
+#      export SMS_MYSQL_USER=sms_user
+#      export SMS_MYSQL_PASSWORD="StrongPasswordHere#123"
+#      export SMS_MYSQL_USE_SSL=true
+#
+# Configuration file properties (used if environment variables are not set):
+db.mysql.username=
+db.mysql.password=
+
+# SSL / TLS Transport Encryption:
+# Setting useSSL=true enforces SSL transport encryption between the application and MySQL server.
+db.mysql.useSSL=true
