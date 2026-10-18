@@ -15,11 +15,11 @@
 | **GradeCalculatorTest** | Academic grading, percentages, GPA 5.0 scale, subject rules | 36 | 36 | 0 | 0 | **100% PASS** |
 | **ExamMarksDAOTest** | CRUD, unique constraints, transactional persistence, duplicate recovery | 25 | 25 | 0 | 0 | **100% PASS** |
 | **AttendanceDAOTest** | Daily tracking, unique constraint, non-duplicate rejection, duplicate race recovery, analytics, student_info integrity, strict dates, bounds, remarks length | 82 | 82 | 0 | 0 | **100% PASS** |
-| **SecurityAndResilienceTest** | PBKDF2 hashing, DoS prevention, setup safety, SQL injection | 89 | 89 | 0 | 0 | **100% PASS** |
-| **MySQLIntegrationTest** | Disposable DB safety guard validation & live MySQL persistence | 15 | 15 | 0 | 0 | **100% PASS (Guard)**<br>*Live MySQL: NOT RUN* |
-| **TOTAL** | **Entire Application Verification** | **247** | **247** | **0** | **0** | **100% PASS** |
+| **SecurityAndResilienceTest** | PBKDF2 hashing, DoS prevention, setup safety, SQL injection, metadata verification | 94 | 94 | 0 | 0 | **100% PASS** |
+| **MySQLIntegrationTest** | Disposable DB safety guard validation & live MySQL persistence | 22 | 22 | 0 | 0 | **100% PASS (Guard)**<br>*Live MySQL: NOT RUN* |
+| **TOTAL** | **Entire Application Verification** | **259** | **259** | **0** | **0** | **100% PASS** |
 
-- **Total Execution Time**: ~8,483 ms (~8.5 seconds)
+- **Total Execution Time**: ~8,454 ms (~8.5 seconds)
 - **Exit Code**: `0`
 
 ---
@@ -274,7 +274,7 @@ Running SecurityAndResilienceTest Suite...
   [PASS] Piggybacked injection returns 0 rows
   [PASS] Table 'exam_marks' survived piggybacked DROP TABLE attempt
   [PASS] UNION-based injection payload returns 0 rows
-SecurityAndResilienceTest Summary: 89 Passed, 0 Failed, 0 Skipped out of 89 tests.
+SecurityAndResilienceTest Summary: 94 Passed, 0 Failed, 0 Skipped out of 94 tests.
 
 ==================================================
 Running MySQLIntegrationTest (Safety Guard & Suite)...
@@ -291,6 +291,17 @@ Running MySQLIntegrationTest (Safety Guard & Suite)...
   [PASS] Safety guard rejects 'live_database' database
   [PASS] Safety guard rejects default 'student_database'
   [PASS] Safety guard rejects database without disposable term
+  [PASS] Safety guard rejects 'prod_test' despite containing 'test'
+  [PASS] Safety guard rejects 'school_sandbox' despite containing 'sandbox'
+  [PASS] Safety guard rejects 'live_disposable' despite containing 'disposable'
+  [PASS] Safety guard rejects 'test' database when opt-in flag is missing
+  [PASS] Safety guard rejects 'sandbox' database when opt-in flag is false
+  [PASS] Cleanup reports failure when connection is null
+[DatabaseBootstrap] Ensuring database tables exist...
+[DatabaseBootstrap] Database schema check completed successfully.
+  [FAIL] Cleanup failed to delete test attendance record for Roll 999999: null
+  [FAIL] Cleanup failed to delete test student record for Roll 999999: null
+  [PASS] Cleanup reports failure when connection throws SQLException
   [PASS] Safety guard accepts 'sms_disposable_test' with opt-in
   [PASS] Safety guard accepts 'sms_test_sandbox' with opt-in
   [PASS] Safety guard accepts 'ci_temp_scratch' with opt-in
@@ -311,11 +322,11 @@ Running MySQLIntegrationTest (Safety Guard & Suite)...
   GradeCalculatorTest:        36 Passed,  0 Failed,  0 Skipped /  36 Total
   ExamMarksDAOTest:           25 Passed,  0 Failed,  0 Skipped /  25 Total
   AttendanceDAOTest:          82 Passed,  0 Failed,  0 Skipped /  82 Total
-  SecurityAndResilienceTest:  89 Passed,  0 Failed,  0 Skipped /  89 Total
-  MySQLIntegrationTest:       15 Passed (Safety Guard) / Live MySQL: NOT RUN (ENVIRONMENTAL LIMITATION)
+  SecurityAndResilienceTest:  94 Passed,  0 Failed,  0 Skipped /  94 Total
+  MySQLIntegrationTest:       22 Passed (Safety Guard) / Live MySQL: NOT RUN (ENVIRONMENTAL LIMITATION)
 --------------------------------------------------------------------------------
-  TOTAL SUITE RESULTS:       247 Passed,  0 Failed,  0 Skipped / 247 Total
-  EXECUTION TIME:            8495 ms
+  TOTAL SUITE RESULTS:       259 Passed,  0 Failed,  0 Skipped / 259 Total
+  EXECUTION TIME:            8454 ms
 ================================================================================
 >>> VERDICT: 100% GREEN - ALL TEST SUITES PASSED RIGOROUS ZERO-TRUST AUDIT. <<<
 ================================================================================

@@ -121,9 +121,15 @@ public class DatabaseBootstrap {
             // Migration check: Ensure existing MySQL installations have Remarks widened to VARCHAR(255)
             if (isMySQL) {
                 int currentSize = getColumnSize(conn, "attendance", "Remarks");
-                // Only execute ALTER TABLE if existing column is positively identified as narrower than 255
-                // (e.g. legacy installations initialized with VARCHAR(100))
-                if (currentSize > 0 && currentSize < 255) {
+
+                if (currentSize == METADATA_INACCESSIBLE) {
+                    throw new SQLException("[DatabaseBootstrap] Migration verification failed: Database metadata is inaccessible for 'attendance.Remarks'. Cannot verify schema safety.");
+                } else if (currentSize == COLUMN_NOT_FOUND) {
+                    throw new SQLException("[DatabaseBootstrap] Migration verification failed: Column 'Remarks' is missing from table 'attendance'.");
+                } else if (currentSize == INVALID_ARGUMENTS) {
+                    throw new SQLException("[DatabaseBootstrap] Migration verification failed: Invalid database connection or parameters.");
+                } else if (currentSize > 0 && currentSize < 255) {
+                    // Column positively identified as narrower than 255 (e.g. legacy VARCHAR(100))
                     try {
                         stmt.executeUpdate("ALTER TABLE attendance MODIFY COLUMN Remarks VARCHAR(255) DEFAULT NULL");
                     } catch (SQLException alterEx) {
@@ -134,12 +140,19 @@ public class DatabaseBootstrap {
                         }
                     }
                 }
+                // (If currentSize >= 255, it is an already-correct schema: skips ALTER TABLE)
 
                 // Strictly verify that attendance.Remarks supports at least 255 characters
                 int verifiedSize = getColumnSize(conn, "attendance", "Remarks");
-                if (verifiedSize > 0 && verifiedSize < 255) {
-                    throw new SQLException("[DatabaseBootstrap] Migration verification failed: attendance.Remarks column size is "
-                            + verifiedSize + ", but at least 255 characters are required.");
+                if (verifiedSize < 255) {
+                    if (verifiedSize == METADATA_INACCESSIBLE) {
+                        throw new SQLException("[DatabaseBootstrap] Migration post-verification failed: Database metadata became inaccessible during verification of attendance.Remarks.");
+                    } else if (verifiedSize == COLUMN_NOT_FOUND) {
+                        throw new SQLException("[DatabaseBootstrap] Migration post-verification failed: Column 'Remarks' is missing from table 'attendance'.");
+                    } else {
+                        throw new SQLException("[DatabaseBootstrap] Migration post-verification failed: attendance.Remarks column size is "
+                                + verifiedSize + ", but at least 255 characters are required.");
+                    }
                 }
             }
 
@@ -164,27 +177,43 @@ public class DatabaseBootstrap {
         }
     }
 
+    public static final int COLUMN_NOT_FOUND = -1;
+    public static final int METADATA_INACCESSIBLE = -2;
+    public static final int INVALID_ARGUMENTS = -3;
+
     /**
      * Inspects column size in database metadata across case variations.
-     * Returns the defined column size, or -1 if the column is not found or metadata is inaccessible.
+     * Returns the defined column size if found,
+     * or COLUMN_NOT_FOUND (-1) if column does not exist,
+     * or METADATA_INACCESSIBLE (-2) if metadata could not be queried,
+     * or INVALID_ARGUMENTS (-3) if arguments are null.
      */
     public static int getColumnSize(Connection conn, String tableName, String columnName) {
-        if (conn == null || tableName == null || columnName == null) return -1;
+        if (conn == null || tableName == null || columnName == null) {
+            return INVALID_ARGUMENTS;
+        }
         try {
             DatabaseMetaData meta = conn.getMetaData();
+            if (meta == null) {
+                return METADATA_INACCESSIBLE;
+            }
             String catalog = conn.getCatalog();
             String[] tables = {tableName, tableName.toLowerCase(), tableName.toUpperCase()};
             String[] columns = {columnName, columnName.toLowerCase(), columnName.toUpperCase()};
             for (String t : tables) {
                 for (String c : columns) {
                     try (ResultSet rs = meta.getColumns(catalog, null, t, c)) {
-                        if (rs.next()) {
+                        if (rs != null && rs.next()) {
                             return rs.getInt("COLUMN_SIZE");
                         }
+                    } catch (SQLException e) {
+                        return METADATA_INACCESSIBLE;
                     }
                 }
             }
-        } catch (Exception ignored) {}
-        return -1;
+            return COLUMN_NOT_FOUND;
+        } catch (Exception e) {
+            return METADATA_INACCESSIBLE;
+        }
     }
 }

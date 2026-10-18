@@ -197,6 +197,15 @@ public class SecurityAndResilienceTest {
             }
             assertTrue("DatabaseBootstrap propagates SQLException when connection is closed or invalid", threwException);
         }
+
+        // Column metadata verification tests for DatabaseBootstrap.getColumnSize
+        assertTrue("DatabaseBootstrap.getColumnSize returns valid size for attendance.Remarks", DatabaseBootstrap.getColumnSize(conn, "attendance", "Remarks") >= 0);
+        assertEquals("DatabaseBootstrap.getColumnSize returns INVALID_ARGUMENTS on null connection", DatabaseBootstrap.INVALID_ARGUMENTS, DatabaseBootstrap.getColumnSize(null, "attendance", "Remarks"));
+        assertEquals("DatabaseBootstrap.getColumnSize returns COLUMN_NOT_FOUND for nonexistent table", DatabaseBootstrap.COLUMN_NOT_FOUND, DatabaseBootstrap.getColumnSize(conn, "nonexistent_table", "Remarks"));
+        assertEquals("DatabaseBootstrap.getColumnSize returns COLUMN_NOT_FOUND for nonexistent column", DatabaseBootstrap.COLUMN_NOT_FOUND, DatabaseBootstrap.getColumnSize(conn, "attendance", "nonexistent_column"));
+        if (closedConn != null) {
+            assertEquals("DatabaseBootstrap.getColumnSize returns METADATA_INACCESSIBLE on closed connection", DatabaseBootstrap.METADATA_INACCESSIBLE, DatabaseBootstrap.getColumnSize(closedConn, "attendance", "Remarks"));
+        }
     }
 
     private void testPasswordSecurityPBKDF2() {

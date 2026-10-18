@@ -14,9 +14,9 @@ All notable changes to the **School Management System** are documented in this f
 - **Attendance Remarks Alignment**: Standardized `Remarks` column length to 255 characters across Java validation (`MAX_REMARKS_LENGTH = 255`), MySQL DDL (`Database/schema/schema-mysql.sql`), runtime auto-migration (`DatabaseBootstrap.java`), and migration script (`Database/migrations/002_widen_attendance_remarks.sql`).
 
 ### Added
-- **Safety Guard Subsuite**: Added 15 offline unit tests within `test/MySQLIntegrationTest.java` verifying 11 refusal paths and 4 acceptance paths for MySQL database targeting safety.
-- **Opt-In Live MySQL Integration Test Suite**: Configured `test/MySQLIntegrationTest.java` to run live tests against real MySQL servers only when `SMS_MYSQL_TEST_HOST` is configured and opt-in safety guards pass, or reporting `NOT RUN (ENVIRONMENTAL LIMITATION)` without failing offline CI.
-- **Boundary & Resilience Regression Tests**: Expanded test suite to 247 automated tests with 100% pass verification, testing non-duplicate constraint rejections (foreign-key, not-null, check constraints), duplicate race recoveries, exception suppression chaining, exact 255-character ASCII and multibyte UTF-8 strings, 256-character rejection diagnostics, and atomic transaction preservation.
+- **Safety Guard Subsuite**: Added 22 offline unit tests within `test/MySQLIntegrationTest.java` verifying refusal paths (rejection of production names, missing opt-in, non-disposable names, unverified test/sandbox names), acceptance paths, live catalog verification, and cleanup failure detection across null and closed connections.
+- **Opt-In Live MySQL Integration Test Suite**: Configured `test/MySQLIntegrationTest.java` with standalone `main` entrypoint, verifying live catalog safety prior to operations and ensuring cleanup failures propagate to non-zero exit codes.
+- **Boundary & Resilience Regression Tests**: Expanded test suite to 259 automated tests with 100% pass verification, testing non-duplicate constraint rejections (foreign-key, not-null, check constraints), duplicate race recoveries, exception suppression chaining, exact 255-character ASCII and multibyte UTF-8 strings, 256-character rejection diagnostics, column metadata status differentiation (`COLUMN_NOT_FOUND`, `METADATA_INACCESSIBLE`, `INVALID_ARGUMENTS`), and atomic transaction preservation.
 
 ### Architecture & Repository Organization
 - **Production-Grade Directory Structure**: Reorganized repository with clear separation of concerns without breaking NetBeans GUI Builder `.form` pairing:

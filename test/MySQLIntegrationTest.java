@@ -214,6 +214,29 @@ public class MySQLIntegrationTest {
         assertFalse("Safety guard rejects 'live_database' database", evaluateDatabaseSafety("live_database", "true").isSafe);
         assertFalse("Safety guard rejects default 'student_database'", evaluateDatabaseSafety("student_database", "true").isSafe);
         assertFalse("Safety guard rejects database without disposable term", evaluateDatabaseSafety("my_custom_db", "true").isSafe);
+        // Prove that presence of 'test' or 'sandbox' alone is NOT treated as proof of safety
+        assertFalse("Safety guard rejects 'prod_test' despite containing 'test'", evaluateDatabaseSafety("prod_test", "true").isSafe);
+        assertFalse("Safety guard rejects 'school_sandbox' despite containing 'sandbox'", evaluateDatabaseSafety("school_sandbox", "true").isSafe);
+        assertFalse("Safety guard rejects 'live_disposable' despite containing 'disposable'", evaluateDatabaseSafety("live_disposable", "true").isSafe);
+        assertFalse("Safety guard rejects 'test' database when opt-in flag is missing", evaluateDatabaseSafety("test", null).isSafe);
+        assertFalse("Safety guard rejects 'sandbox' database when opt-in flag is false", evaluateDatabaseSafety("sandbox", "false").isSafe);
+
+        // Prove cleanup failure surfaces as false when connection is invalid
+        assertFalse("Cleanup reports failure when connection is null", cleanupTestRecords(null, 999999, "2026-10-18", true, true));
+
+        // Prove cleanup failure surfaces as false when connection throws SQLException (closed connection)
+        try {
+            java.io.File dummyFile = java.io.File.createTempFile("sms_cleanup_guard_", ".sqlite");
+            dummyFile.deleteOnExit();
+            Connection closedConn = javaconnect.getTestConnection(dummyFile);
+            if (closedConn != null) {
+                closedConn.close();
+                assertFalse("Cleanup reports failure when connection throws SQLException", cleanupTestRecords(closedConn, 999999, "2026-10-18", true, true));
+            }
+            dummyFile.delete();
+        } catch (Exception e) {
+            System.err.println("  [WARN] Failed to execute closed connection cleanup guard test: " + e.getMessage());
+        }
 
         // Acceptance paths
         assertTrue("Safety guard accepts 'sms_disposable_test' with opt-in", evaluateDatabaseSafety("sms_disposable_test", "true").isSafe);
@@ -224,6 +247,16 @@ public class MySQLIntegrationTest {
 
     private void runLiveMySQLTests(Connection conn) throws SQLException {
         System.out.println("--- Subsuite: Live MySQL Operations & Resilience ---");
+
+        // Positive evidence check: verify connected catalog is verified as a safe, disposable database
+        String connectedDb = conn.getCatalog();
+        if (connectedDb != null && !connectedDb.trim().isEmpty()) {
+            String optInFlag = getEnvOrProp("SMS_MYSQL_ENABLE_DESTRUCTIVE_INTEGRATION_TESTS", "sms.mysql.enable.destructive.integration.tests");
+            SafetyCheckResult connSafety = evaluateDatabaseSafety(connectedDb, optInFlag);
+            if (!connSafety.isSafe) {
+                throw new IllegalStateException("Safety abort: Connected database catalog '" + connectedDb + "' failed safety verification: " + connSafety.reason);
+            }
+        }
 
         // 1. Bootstrap schema in MySQL
         boolean bootstrapped = DatabaseBootstrap.bootstrap(conn);
@@ -318,29 +351,44 @@ public class MySQLIntegrationTest {
 
         } finally {
             // Targeted cleanup strictly scoped to rows created by this specific run
-            cleanupTestRecords(conn, testRoll, testDate, attendanceCreated, studentCreated);
+            boolean cleaned = cleanupTestRecords(conn, testRoll, testDate, attendanceCreated, studentCreated);
+            if (studentCreated || attendanceCreated) {
+                assertTrue("Test cleanup completed without error", cleaned);
+            }
         }
     }
 
-    private void cleanupTestRecords(Connection conn, int roll, String date, boolean cleanAttendance, boolean cleanStudent) {
+    public boolean cleanupTestRecords(Connection conn, int roll, String date, boolean cleanAttendance, boolean cleanStudent) {
+        if (conn == null) {
+            return false;
+        }
+
+        boolean allClean = true;
         if (cleanAttendance) {
             try (PreparedStatement pst1 = conn.prepareStatement("DELETE FROM attendance WHERE Roll = ? AND Attendance_date = ?")) {
-                pst1.setInt(1, roll);
-                pst1.setString(2, date);
-                pst1.executeUpdate();
-            } catch (SQLException ex) {
-                System.err.println("  [CLEANUP WARNING] Failed to delete test attendance record for Roll " + roll + ": " + ex.getMessage());
+                if (pst1 != null) {
+                    pst1.setInt(1, roll);
+                    pst1.setString(2, date);
+                    pst1.executeUpdate();
+                }
+            } catch (Exception ex) {
+                allClean = false;
+                System.err.println("  [FAIL] Cleanup failed to delete test attendance record for Roll " + roll + ": " + ex.getMessage());
             }
         }
 
         if (cleanStudent) {
             try (PreparedStatement pst2 = conn.prepareStatement("DELETE FROM student_info WHERE Roll = ?")) {
-                pst2.setInt(1, roll);
-                pst2.executeUpdate();
-            } catch (SQLException ex) {
-                System.err.println("  [CLEANUP WARNING] Failed to delete test student record for Roll " + roll + ": " + ex.getMessage());
+                if (pst2 != null) {
+                    pst2.setInt(1, roll);
+                    pst2.executeUpdate();
+                }
+            } catch (Exception ex) {
+                allClean = false;
+                System.err.println("  [FAIL] Cleanup failed to delete test student record for Roll " + roll + ": " + ex.getMessage());
             }
         }
+        return allClean;
     }
 
     private String getEnvOrProp(String envKey, String propKey) {
@@ -353,5 +401,17 @@ public class MySQLIntegrationTest {
             return val.trim();
         }
         return null;
+    }
+
+    public static void main(String[] args) {
+        MySQLIntegrationTest suite = new MySQLIntegrationTest();
+        boolean passed = suite.runAllTests();
+        if (!passed) {
+            System.err.println(">>> MySQLIntegrationTest FAILED - EXITING WITH CODE 1 <<<");
+            System.exit(1);
+        } else {
+            System.out.println(">>> MySQLIntegrationTest PASSED <<<");
+            System.exit(0);
+        }
     }
 }
