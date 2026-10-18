@@ -419,9 +419,8 @@ public class Student_Grades_System extends javax.swing.JFrame {
     }
 
     private void saveRecord() {
-        if (txt_roll.getText().trim().isEmpty() || txt_name.getText().trim().isEmpty() ||
-            txt_class.getText().trim().isEmpty() || txt_year.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please fill in Roll, Name, Class, and Year.");
+        if (txt_roll.getText().trim().isEmpty() || txt_year.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in Roll and Year.", "Validation Error", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -430,12 +429,30 @@ public class Student_Grades_System extends javax.swing.JFrame {
 
         try {
             int roll = Integer.parseInt(txt_roll.getText().trim());
-            int cls = Integer.parseInt(txt_class.getText().trim());
             int yr = Integer.parseInt(txt_year.getText().trim());
             String term = (String) combo_term.getSelectedItem();
 
+            // Authoritative verification against student_info
+            String authoritativeName;
+            int authoritativeClass;
+            String checkSql = "SELECT First_name, Last_name, Class FROM student_info WHERE Roll = ?";
+            try (PreparedStatement checkPst = conn.prepareStatement(checkSql)) {
+                checkPst.setInt(1, roll);
+                try (ResultSet rs = checkPst.executeQuery()) {
+                    if (rs.next()) {
+                        authoritativeName = rs.getString("First_name") + " " + rs.getString("Last_name");
+                        authoritativeClass = rs.getInt("Class");
+                        txt_name.setText(authoritativeName);
+                        txt_class.setText(String.valueOf(authoritativeClass));
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Cannot save marks: Student with Roll " + roll + " does not exist in the student database.\nPlease create the student record first.", "Student Not Found", JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
+                }
+            }
+
             ExamMarksDAO.ExamMark mark = new ExamMarksDAO.ExamMark(
-                    roll, txt_name.getText().trim(), cls, term, yr,
+                    roll, authoritativeName, authoritativeClass, term, yr,
                     Double.parseDouble(txt_english.getText().trim()),
                     Double.parseDouble(txt_math.getText().trim()),
                     Double.parseDouble(txt_science.getText().trim()),
@@ -446,13 +463,15 @@ public class Student_Grades_System extends javax.swing.JFrame {
 
             boolean success = ExamMarksDAO.saveOrUpdate(conn, mark);
             if (success) {
-                JOptionPane.showMessageDialog(this, "Exam marks saved successfully!");
+                JOptionPane.showMessageDialog(this, "Exam marks saved successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
                 loadTableData();
             } else {
-                JOptionPane.showMessageDialog(this, "Failed to save record.");
+                JOptionPane.showMessageDialog(this, "Failed to save record.", "Error", JOptionPane.ERROR_MESSAGE);
             }
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Roll and Year must be valid integers.", "Validation Error", JOptionPane.ERROR_MESSAGE);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error saving record: " + ex.getMessage());
+            JOptionPane.showMessageDialog(this, "Error saving record: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -469,6 +488,10 @@ public class Student_Grades_System extends javax.swing.JFrame {
         int confirm = JOptionPane.showConfirmDialog(
                 this, "Are you sure you want to delete this exam record?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
+
+        if (!Admin.verifyAdmin(this, conn)) {
+            return;
+        }
 
         try {
             int roll = Integer.parseInt(rollStr);

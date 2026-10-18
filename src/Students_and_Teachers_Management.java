@@ -17,15 +17,8 @@ public class Students_and_Teachers_Management extends javax.swing.JFrame {
     
      
             
-    Connection conn=null;
-    ResultSet rs=null;
-    PreparedStatement pst=null;
-    
     public Students_and_Teachers_Management() {
         initComponents();
-        
-                
-        conn=javaconnect.connerDb();
         CurrentDate();
     }
     

@@ -16,6 +16,22 @@ public class Login_frame extends javax.swing.JFrame {
         initComponents();
         
         conn=javaconnect.connerDb();
+        checkFirstRunSetup();
+    }
+    
+    private void checkFirstRunSetup() {
+        if (conn == null) return;
+        try (Statement stmt = conn.createStatement();
+             ResultSet countRs = stmt.executeQuery("SELECT COUNT(*) FROM pass")) {
+            if (countRs.next() && countRs.getInt(1) == 0) {
+                SwingUtilities.invokeLater(() -> {
+                    FirstRunSetupDialog dialog = new FirstRunSetupDialog(this, conn);
+                    dialog.setVisible(true);
+                });
+            }
+        } catch (Exception e) {
+            System.err.println("[Login_frame] Error checking first-run setup: " + e.getMessage());
+        }
     }
     
     
@@ -295,42 +311,32 @@ public class Login_frame extends javax.swing.JFrame {
     }//GEN-LAST:event_txt_passwordActionPerformed
 
     private void cmd_loginActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_loginActionPerformed
-        // TODO add your handling code here:
+        String username = txt_username.getText().trim();
+        char[] password = txt_password.getPassword();
 
-        String sql="select * from pass where Username=? and Password=?";
-        
+        if (username.isEmpty() || password.length == 0) {
+            JOptionPane.showMessageDialog(this, "Please enter both Username and Password.", "Login Error", JOptionPane.WARNING_MESSAGE);
+            PasswordSecurity.wipe(password);
+            return;
+        }
+
         try {
-            pst=conn.prepareStatement(sql);
-            pst.setString(1, txt_username.getText());
-
-            pst.setString(2, txt_password.getText());
-
-            rs=pst.executeQuery();
-            if(rs.next()){
-                JOptionPane.showMessageDialog(null, "Log in Successful.");
-                rs.close();
-                pst.close();
-              
+            boolean authenticated = PasswordSecurity.authenticateAndMigrateUser(conn, username, password);
+            if (authenticated) {
+                JOptionPane.showMessageDialog(this, "Log in Successful.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                Students_and_Teachers_Management dashboard = new Students_and_Teachers_Management();
+                dashboard.setVisible(true);
                 close();
- 
-                Students_and_Teachers_Management e = new Students_and_Teachers_Management();
-                e.setVisible(true);
-                
-              close();
-            }
-            else{
-                JOptionPane.showMessageDialog(null, "Worng!!! User Name and Password");
-
+            } else {
+                JOptionPane.showMessageDialog(this, "Invalid Username or Password.", "Authentication Failed", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception e) {
-            
-            JOptionPane.showMessageDialog(null, e);
- 
+            JOptionPane.showMessageDialog(this, "A problem occurred while processing your login request.", "Login Error", JOptionPane.ERROR_MESSAGE);
+            System.err.println("[Login_frame] Login processing error: " + e.getMessage());
+        } finally {
+            PasswordSecurity.wipe(password);
+            txt_password.setText("");
         }
-        
-
-
-        
     }//GEN-LAST:event_cmd_loginActionPerformed
 
     private void txt_usernameActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txt_usernameActionPerformed

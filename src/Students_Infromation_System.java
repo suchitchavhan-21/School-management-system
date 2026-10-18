@@ -691,39 +691,56 @@ public class Students_Infromation_System extends javax.swing.JFrame {
     }//GEN-LAST:event_txt_presentActionPerformed
 
     private void cmd_saveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_saveActionPerformed
-        // TODO add your handling code here:
-        
-        int p=JOptionPane.showConfirmDialog(null, "Are you Sure to Save?","Save",JOptionPane.YES_NO_OPTION);
-        if(p==0)
-        {
+        String rollStr = txt_roll.getText().trim();
+        String firstName = txt_firstname.getText().trim();
+        String lastName = txt_lastname.getText().trim();
+        String className = txt_classname.getText().trim();
+        String yearStr = txt_year.getText().trim();
+        String birthDate = txt_birthday.getText().trim();
+        String mobile = txt_mobile.getText().trim();
+        String sex = txt_sex.getText().trim();
+        String perm = txt_permanent.getText().trim();
+        String pres = txt_present.getText().trim();
+
+        if (rollStr.isEmpty() || firstName.isEmpty() || lastName.isEmpty() || className.isEmpty() || yearStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in all required fields (Roll, First Name, Last Name, Class, Year).", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int roll, cls, yr;
         try {
-
-            String sql="insert into student_info (Roll,First_name,Last_name,Class,Year,Birth_date,Mobile_no,Sex,permanent,Present) values(?,?,?,?,?,?,?,?,?,?)";
-
-            pst=conn.prepareStatement(sql);
-
-            pst.setString(1, txt_roll.getText());
-            pst.setString(2, txt_firstname.getText());
-            pst.setString(3, txt_lastname.getText());
-            pst.setString(4, txt_classname.getText());
-            pst.setString(5, txt_year.getText());
-            pst.setString(6, txt_birthday.getText());
-            pst.setString(7, txt_mobile.getText());
-            pst.setString(8, txt_sex.getText());
-            pst.setString(9, txt_permanent.getText());
-            pst.setString(10, txt_present.getText());
-
-            pst.execute();
-            JOptionPane.showMessageDialog(null, "Data Save Successfully.");
-
-        } catch (Exception e) {
-
-            JOptionPane.showMessageDialog(null, e);
+            roll = Integer.parseInt(rollStr);
+            cls = Integer.parseInt(className);
+            yr = Integer.parseInt(yearStr);
+            if (roll <= 0) throw new NumberFormatException();
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Roll, Class, and Year must be valid positive integers.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
-        }
-        
-     
 
+        int p = JOptionPane.showConfirmDialog(this, "Are you sure you want to save this student record?", "Save Record", JOptionPane.YES_NO_OPTION);
+        if (p == JOptionPane.YES_OPTION) {
+            String sql = "INSERT INTO student_info (Roll, First_name, Last_name, Class, Year, Birth_date, Mobile_no, Sex, permanent, Present) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            try (PreparedStatement insertPst = conn.prepareStatement(sql)) {
+                insertPst.setInt(1, roll);
+                insertPst.setString(2, firstName);
+                insertPst.setString(3, lastName);
+                insertPst.setInt(4, cls);
+                insertPst.setInt(5, yr);
+                insertPst.setString(6, birthDate);
+                insertPst.setString(7, mobile);
+                insertPst.setString(8, sex);
+                insertPst.setString(9, perm);
+                insertPst.setString(10, pres);
+
+                int rows = insertPst.executeUpdate();
+                if (rows > 0) {
+                    JOptionPane.showMessageDialog(this, "Student record saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Error saving student: " + (e.getMessage().contains("PRIMARY") || e.getMessage().contains("UNIQUE") ? "A student with Roll " + roll + " already exists." : e.getMessage()), "Database Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }//GEN-LAST:event_cmd_saveActionPerformed
 
     private void txt_birthdayActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txt_birthdayActionPerformed
@@ -759,61 +776,89 @@ public class Students_Infromation_System extends javax.swing.JFrame {
     }//GEN-LAST:event_jMenuItem2ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
-        // TODO add your handling code here:
-                
-        int p=JOptionPane.showConfirmDialog(null, "Are you Sure to Update data?","Update",JOptionPane.YES_NO_OPTION);
-        if(p==0)
-        {
-           try {
-                String sql = "UPDATE student_info SET First_name=?, Last_name=?, Class=?, Year=?, Birth_date=?, Mobile_no=?, Sex=?, permanent=?, Present=? WHERE Roll=?";
-                try (PreparedStatement updatePst = conn.prepareStatement(sql)) {
-                    updatePst.setString(1, txt_firstname.getText().trim());
-                    updatePst.setString(2, txt_lastname.getText().trim());
-                    updatePst.setString(3, txt_classname.getText().trim());
-                    updatePst.setString(4, txt_year.getText().trim());
-                    updatePst.setString(5, txt_birthday.getText().trim());
-                    updatePst.setString(6, txt_mobile.getText().trim());
-                    updatePst.setString(7, txt_sex.getText().trim());
-                    updatePst.setString(8, txt_permanent.getText().trim());
-                    updatePst.setString(9, txt_present.getText().trim());
-                    updatePst.setString(10, txt_roll.getText().trim());
-                    
-                    int rows = updatePst.executeUpdate();
-                    if (rows > 0) {
-                        JOptionPane.showMessageDialog(null, "Table Updated Successfully.");
-                    } else {
-                        JOptionPane.showMessageDialog(null, "No student record found with Roll: " + txt_roll.getText());
-                    }
-                }
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(null, "Update error: " + e.getMessage());
-            }
-        
+        String rollStr = txt_roll.getText().trim();
+        String firstName = txt_firstname.getText().trim();
+        String lastName = txt_lastname.getText().trim();
+        String className = txt_classname.getText().trim();
+        String yearStr = txt_year.getText().trim();
+
+        if (rollStr.isEmpty() || firstName.isEmpty() || lastName.isEmpty() || className.isEmpty() || yearStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in all required fields (Roll, First Name, Last Name, Class, Year).", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            return;
         }
-        
-        
+
+        int roll, cls, yr;
+        try {
+            roll = Integer.parseInt(rollStr);
+            cls = Integer.parseInt(className);
+            yr = Integer.parseInt(yearStr);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Roll, Class, and Year must be valid integers.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int p = JOptionPane.showConfirmDialog(this, "Are you sure you want to update this student record?", "Update Record", JOptionPane.YES_NO_OPTION);
+        if (p == JOptionPane.YES_OPTION) {
+            String sql = "UPDATE student_info SET First_name=?, Last_name=?, Class=?, Year=?, Birth_date=?, Mobile_no=?, Sex=?, permanent=?, Present=? WHERE Roll=?";
+            try (PreparedStatement updatePst = conn.prepareStatement(sql)) {
+                updatePst.setString(1, firstName);
+                updatePst.setString(2, lastName);
+                updatePst.setInt(3, cls);
+                updatePst.setInt(4, yr);
+                updatePst.setString(5, txt_birthday.getText().trim());
+                updatePst.setString(6, txt_mobile.getText().trim());
+                updatePst.setString(7, txt_sex.getText().trim());
+                updatePst.setString(8, txt_permanent.getText().trim());
+                updatePst.setString(9, txt_present.getText().trim());
+                updatePst.setInt(10, roll);
+
+                int rows = updatePst.executeUpdate();
+                if (rows > 0) {
+                    JOptionPane.showMessageDialog(this, "Student record updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(this, "No student record found with Roll: " + roll, "Not Found", JOptionPane.WARNING_MESSAGE);
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Update error: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }//GEN-LAST:event_jButton2ActionPerformed
 
     private void cmd_deleteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_deleteActionPerformed
-        // TODO add your handling code here:
-             //   Admin e = new Admin();
-              //  e.setVisible(true);
-                
-        int p=JOptionPane.showConfirmDialog(null, "Are you Sure to Delete?","Delete",JOptionPane.YES_NO_OPTION);
-        if(p==0)
-        {
-        String sql="delete from student_info where Roll=?";
-        try {
-            pst=conn.prepareStatement(sql);
-            
-            pst.setString(1, txt_roll.getText());
-
-            pst.execute();
-
-             JOptionPane.showMessageDialog(null, "Data Deleted Successfully"); 
-        } catch (Exception e) {
-             JOptionPane.showMessageDialog(null,"We face a Problem."); 
+        String rollStr = txt_roll.getText().trim();
+        if (rollStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter or select a Student Roll to delete.", "Input Required", JOptionPane.WARNING_MESSAGE);
+            return;
         }
+
+        int roll;
+        try {
+            roll = Integer.parseInt(rollStr);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Roll must be a valid numeric integer.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Verify Administrator authorization before permitting record deletion
+        if (!Admin.verifyAdmin(this, conn)) {
+            return;
+        }
+
+        int p = JOptionPane.showConfirmDialog(this, "Are you sure you want to permanently delete Student Roll " + roll + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (p == JOptionPane.YES_OPTION) {
+            String sql = "DELETE FROM student_info WHERE Roll = ?";
+            try (PreparedStatement delPst = conn.prepareStatement(sql)) {
+                delPst.setInt(1, roll);
+                int rows = delPst.executeUpdate();
+                if (rows > 0) {
+                    JOptionPane.showMessageDialog(this, "Student record deleted successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                    jButton3ActionPerformed(null); // Clear form fields
+                } else {
+                    JOptionPane.showMessageDialog(this, "No student record found with Roll: " + roll, "Not Found", JOptionPane.WARNING_MESSAGE);
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Error deleting student record: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }//GEN-LAST:event_cmd_deleteActionPerformed
 

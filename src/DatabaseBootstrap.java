@@ -1,12 +1,13 @@
 import java.sql.Connection;
-import java.sql.ResultSet;
+import java.sql.DatabaseMetaData;
 import java.sql.Statement;
 
 /**
  * Handles database bootstrapping and schema initialization.
- * Automatically creates required tables and initial seed data if not present.
+ * Automatically verifies and creates required tables without hardcoding default production credentials or sample records.
  */
 public class DatabaseBootstrap {
+
     public static void initialize(Connection conn) {
         bootstrap(conn);
     }
@@ -20,33 +21,24 @@ public class DatabaseBootstrap {
         try (Statement stmt = conn.createStatement()) {
             System.out.println("[DatabaseBootstrap] Ensuring database tables exist...");
 
+            boolean isMySQL = false;
+            try {
+                DatabaseMetaData meta = conn.getMetaData();
+                if (meta != null && meta.getDatabaseProductName() != null) {
+                    isMySQL = meta.getDatabaseProductName().toLowerCase().contains("mysql");
+                }
+            } catch (Exception ignored) {}
+
             // 1. pass table (user credentials)
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS pass (" +
-                    "Username VARCHAR(50) NOT NULL, " +
-                    "Password VARCHAR(50) NOT NULL" +
+                    "Username VARCHAR(50) NOT NULL PRIMARY KEY, " +
+                    "Password VARCHAR(255) NOT NULL" +
                     ")");
 
-            // Seed default users if empty
-            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM pass")) {
-                if (rs.next() && rs.getInt(1) == 0) {
-                    stmt.executeUpdate("INSERT INTO pass (Username, Password) VALUES ('school', 'school')");
-                    stmt.executeUpdate("INSERT INTO pass (Username, Password) VALUES ('admin', 'admin')");
-                    System.out.println("[DatabaseBootstrap] Seeded default credentials in 'pass' table.");
-                }
-            }
-
-            // 2. admin table
+            // 2. admin table (admin authorization PIN / password)
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS admin (" +
-                    "Password VARCHAR(50) NOT NULL" +
+                    "Password VARCHAR(255) NOT NULL" +
                     ")");
-
-            // Seed default admin password if empty
-            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM admin")) {
-                if (rs.next() && rs.getInt(1) == 0) {
-                    stmt.executeUpdate("INSERT INTO admin (Password) VALUES ('123')");
-                    System.out.println("[DatabaseBootstrap] Seeded default admin password in 'admin' table.");
-                }
-            }
 
             // 3. student_info table
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS student_info (" +
@@ -61,19 +53,6 @@ public class DatabaseBootstrap {
                     "permanent VARCHAR(100) NOT NULL, " +
                     "Present VARCHAR(100) NOT NULL" +
                     ")");
-
-            // Seed sample student if empty
-            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM student_info")) {
-                if (rs.next() && rs.getInt(1) == 0) {
-                    stmt.executeUpdate("INSERT INTO student_info " +
-                            "(Roll, First_name, Last_name, Class, Year, Birth_date, Mobile_no, Sex, permanent, Present) " +
-                            "VALUES (15001, 'Subrata', 'Paul', 10, 2024, '2008-11-22', '01738061325', 'male', 'Nandigram', 'Bogra')");
-                    stmt.executeUpdate("INSERT INTO student_info " +
-                            "(Roll, First_name, Last_name, Class, Year, Birth_date, Mobile_no, Sex, permanent, Present) " +
-                            "VALUES (15002, 'Uttam', 'Paul', 10, 2024, '2008-11-02', '01738820941', 'male', 'Nandigram', 'Bogra')");
-                    System.out.println("[DatabaseBootstrap] Seeded sample students in 'student_info' table.");
-                }
-            }
 
             // 4. teacher_info table
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS teacher_info (" +
@@ -102,8 +81,9 @@ public class DatabaseBootstrap {
                     ")");
 
             // 6. exam_marks table (Academic Examination & Grading Feature)
+            String autoIncClause = isMySQL ? "INT PRIMARY KEY AUTO_INCREMENT" : "INTEGER PRIMARY KEY AUTOINCREMENT";
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS exam_marks (" +
-                    "Mark_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "Mark_id " + autoIncClause + ", " +
                     "Roll INTEGER NOT NULL, " +
                     "Student_name VARCHAR(100) NOT NULL, " +
                     "Class INTEGER NOT NULL, " +

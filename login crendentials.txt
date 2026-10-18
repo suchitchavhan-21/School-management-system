@@ -1,11 +1,11 @@
 School Management System in Java
+=================================
 
+SECURITY NOTICE:
+In accordance with zero-trust security standards, shared default production credentials
+have been permanently removed from the source code and configuration.
 
-username		password
-
-school			school
-
-This school management system is brought to you by code-projects.org
-Feel free to use it and remember don't try to upload it on any other websites. This may land you in legal trouble.
-
-But you can use it for your assignment and coursework submissions.
+INITIAL SETUP:
+On first launch, the application will automatically prompt the administrator to set up
+their secure administrator account and password. All passwords are encrypted and stored
+using PBKDF2 with salted HMAC-SHA256 (65,536 iterations).

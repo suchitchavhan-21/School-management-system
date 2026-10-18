@@ -586,91 +586,134 @@ public class Employees_Infromation_System extends javax.swing.JFrame {
     }//GEN-LAST:event_txt_birthdayActionPerformed
 
     private void cmd_tdeleteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_tdeleteActionPerformed
-        // TODO add your handling code here:
+        String idStr = txt_teacher_ID.getText().trim();
+        if (idStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter or select an Employee ID to delete.", "Input Required", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-        int p=JOptionPane.showConfirmDialog(null, "Are you Sure to Delete?","Delete",JOptionPane.YES_NO_OPTION);
-        if(p==0)
-        {
-            String sql="delete from employee_info where Employee_id=?";
-            try {
-                pst=conn.prepareStatement(sql);
+        int empId;
+        try {
+            empId = Integer.parseInt(idStr);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Employee ID must be a valid integer.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-                pst.setString(1, txt_teacher_ID.getText());
+        if (!Admin.verifyAdmin(this, conn)) {
+            return;
+        }
 
-                pst.execute();
-
-                JOptionPane.showMessageDialog(null, "Data Deleted Successfully.");
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(null,"We face a Problem.");
+        int p = JOptionPane.showConfirmDialog(this, "Are you sure you want to permanently delete Employee ID " + empId + "?", "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (p == JOptionPane.YES_OPTION) {
+            String sql = "DELETE FROM employee_info WHERE Employee_id = ?";
+            try (PreparedStatement delPst = conn.prepareStatement(sql)) {
+                delPst.setInt(1, empId);
+                int rows = delPst.executeUpdate();
+                if (rows > 0) {
+                    JOptionPane.showMessageDialog(this, "Employee record deleted successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                    txt_tclearActionPerformed(null);
+                } else {
+                    JOptionPane.showMessageDialog(this, "No employee record found with ID: " + empId, "Not Found", JOptionPane.WARNING_MESSAGE);
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Error deleting employee record: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
             }
-
         }
     }//GEN-LAST:event_cmd_tdeleteActionPerformed
 
     private void cmd_tsaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_tsaveActionPerformed
-        // TODO add your handling code here:
+        String idStr = txt_teacher_ID.getText().trim();
+        String firstName = txt_firstname.getText().trim();
+        String lastName = txt_lastname.getText().trim();
+        String position = txt_position.getText().trim();
+        String birthday = txt_birthday.getText().trim();
+        String mobile = txt_mobile.getText().trim();
+        String sex = txt_sex.getText().trim();
+        String perm = txt_permanent.getText().trim();
+        String pres = txt_present.getText().trim();
 
-        int p=JOptionPane.showConfirmDialog(null, "Are you Sure to Save?","Save",JOptionPane.YES_NO_OPTION);
-        if(p==0)
-        {
-            try {
+        if (idStr.isEmpty() || firstName.isEmpty() || lastName.isEmpty() || position.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in all required fields (Employee ID, First Name, Last Name, Position).", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
-                String sql="insert into employee_info (Employee_id,First_name,Last_name,Position,Birth_day,Mobile_no,Sex,Permanent,Present) values(?,?,?,?,?,?,?,?,?)";
+        int empId;
+        try {
+            empId = Integer.parseInt(idStr);
+            if (empId <= 0) throw new NumberFormatException();
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Employee ID must be a valid positive integer.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-                pst=conn.prepareStatement(sql);
+        int p = JOptionPane.showConfirmDialog(this, "Are you sure you want to save this employee record?", "Save Record", JOptionPane.YES_NO_OPTION);
+        if (p == JOptionPane.YES_OPTION) {
+            String sql = "INSERT INTO employee_info (Employee_id, First_name, Last_name, Position, Birth_day, Mobile_no, Sex, Permanent, Present) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            try (PreparedStatement insertPst = conn.prepareStatement(sql)) {
+                insertPst.setInt(1, empId);
+                insertPst.setString(2, firstName);
+                insertPst.setString(3, lastName);
+                insertPst.setString(4, position);
+                insertPst.setString(5, birthday);
+                insertPst.setString(6, mobile);
+                insertPst.setString(7, sex);
+                insertPst.setString(8, perm);
+                insertPst.setString(9, pres);
 
-                pst.setString(1, txt_teacher_ID.getText());
-                pst.setString(2, txt_firstname.getText());
-                pst.setString(3, txt_lastname.getText());
-                pst.setString(4, txt_position.getText());
-                pst.setString(5, txt_birthday.getText());
-                pst.setString(6, txt_mobile.getText());
-                pst.setString(7, txt_sex.getText());
-                pst.setString(8, txt_permanent.getText());
-                pst.setString(9, txt_present.getText());
-
-                pst.execute();
-                JOptionPane.showMessageDialog(null, "Data Saved Successfully.");
-
-            } catch (Exception e) {
-
-                JOptionPane.showMessageDialog(null, "We face a Problem.");
+                int rows = insertPst.executeUpdate();
+                if (rows > 0) {
+                    JOptionPane.showMessageDialog(this, "Employee record saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Error saving employee: " + (e.getMessage().contains("PRIMARY") || e.getMessage().contains("UNIQUE") ? "An employee with ID " + empId + " already exists." : e.getMessage()), "Database Error", JOptionPane.ERROR_MESSAGE);
             }
-
         }
     }//GEN-LAST:event_cmd_tsaveActionPerformed
 
     private void txt_tupdateActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txt_tupdateActionPerformed
-        // TODO add your handling code here:
+        String idStr = txt_teacher_ID.getText().trim();
+        String firstName = txt_firstname.getText().trim();
+        String lastName = txt_lastname.getText().trim();
+        String position = txt_position.getText().trim();
 
-        int p=JOptionPane.showConfirmDialog(null, "Are you Sure to Update?","Update",JOptionPane.YES_NO_OPTION);
-        if(p==0)
-        {
-            try {
-                String sql = "UPDATE employee_info SET First_name=?, Last_name=?, Position=?, Birth_day=?, Mobile_no=?, Sex=?, Permanent=?, Present=? WHERE Employee_id=?";
-                try (PreparedStatement updatePst = conn.prepareStatement(sql)) {
-                    updatePst.setString(1, txt_firstname.getText().trim());
-                    updatePst.setString(2, txt_lastname.getText().trim());
-                    updatePst.setString(3, txt_position.getText().trim());
-                    updatePst.setString(4, txt_birthday.getText().trim());
-                    updatePst.setString(5, txt_mobile.getText().trim());
-                    updatePst.setString(6, txt_sex.getText().trim());
-                    updatePst.setString(7, txt_permanent.getText().trim());
-                    updatePst.setString(8, txt_present.getText().trim());
-                    updatePst.setString(9, txt_teacher_ID.getText().trim());
-
-                    int rows = updatePst.executeUpdate();
-                    if (rows > 0) {
-                        JOptionPane.showMessageDialog(null, "Table Updated Successfully.");
-                    } else {
-                        JOptionPane.showMessageDialog(null, "No employee record found with ID: " + txt_teacher_ID.getText());
-                    }
-                }
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(null, "Update error: " + e.getMessage());
-            }
+        if (idStr.isEmpty() || firstName.isEmpty() || lastName.isEmpty() || position.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in all required fields (Employee ID, First Name, Last Name, Position).", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            return;
         }
 
+        int empId;
+        try {
+            empId = Integer.parseInt(idStr);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Employee ID must be a valid integer.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int p = JOptionPane.showConfirmDialog(this, "Are you sure you want to update this employee record?", "Update Record", JOptionPane.YES_NO_OPTION);
+        if (p == JOptionPane.YES_OPTION) {
+            String sql = "UPDATE employee_info SET First_name=?, Last_name=?, Position=?, Birth_day=?, Mobile_no=?, Sex=?, Permanent=?, Present=? WHERE Employee_id=?";
+            try (PreparedStatement updatePst = conn.prepareStatement(sql)) {
+                updatePst.setString(1, firstName);
+                updatePst.setString(2, lastName);
+                updatePst.setString(3, position);
+                updatePst.setString(4, txt_birthday.getText().trim());
+                updatePst.setString(5, txt_mobile.getText().trim());
+                updatePst.setString(6, txt_sex.getText().trim());
+                updatePst.setString(7, txt_permanent.getText().trim());
+                updatePst.setString(8, txt_present.getText().trim());
+                updatePst.setInt(9, empId);
+
+                int rows = updatePst.executeUpdate();
+                if (rows > 0) {
+                    JOptionPane.showMessageDialog(this, "Employee record updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(this, "No employee record found with ID: " + empId, "Not Found", JOptionPane.WARNING_MESSAGE);
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Update error: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }//GEN-LAST:event_txt_tupdateActionPerformed
 
     private void txt_presentActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_txt_presentActionPerformed

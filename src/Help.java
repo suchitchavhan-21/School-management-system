@@ -21,13 +21,9 @@ public class Help extends javax.swing.JFrame {
     /**
      * Creates new form Help
      */
-        Connection conn=null;
-    ResultSet rs=null;
-    PreparedStatement pst=null;
     public Help() {
         initComponents();
-       conn=javaconnect.connerDb();
-       CurrentDate();
+        CurrentDate();
     }
     
      public  void close()

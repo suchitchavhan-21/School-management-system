@@ -5,6 +5,8 @@ public class GradeCalculatorTest {
 
     private int testsRun = 0;
     private int testsPassed = 0;
+    private int testsFailed = 0;
+    private int testsSkipped = 0;
 
     public static void main(String[] args) {
         GradeCalculatorTest test = new GradeCalculatorTest();
@@ -22,9 +24,15 @@ public class GradeCalculatorTest {
         testInvalidMarksValidation();
         testRoundingAndPrecision();
 
-        System.out.printf("GradeCalculatorTest Result: %d/%d tests passed.\n\n", testsPassed, testsRun);
-        return testsRun == testsPassed;
+        System.out.printf("GradeCalculatorTest Summary: %d Passed, %d Failed, %d Skipped out of %d tests.\n\n",
+                testsPassed, testsFailed, testsSkipped, testsRun);
+        return testsFailed == 0 && testsSkipped == 0 && testsRun > 0;
     }
+
+    public int getTestsRun() { return testsRun; }
+    public int getTestsPassed() { return testsPassed; }
+    public int getTestsFailed() { return testsFailed; }
+    public int getTestsSkipped() { return testsSkipped; }
 
     private void assertTrue(String message, boolean condition) {
         testsRun++;
@@ -32,6 +40,7 @@ public class GradeCalculatorTest {
             testsPassed++;
             System.out.println("  [PASS] " + message);
         } else {
+            testsFailed++;
             System.err.println("  [FAIL] " + message);
         }
     }
@@ -45,6 +54,7 @@ public class GradeCalculatorTest {
             testsPassed++;
             System.out.println("  [PASS] " + message);
         } else {
+            testsFailed++;
             System.err.printf("  [FAIL] %s - Expected: %s, Got: %s\n", message, expected, actual);
         }
     }
@@ -55,6 +65,7 @@ public class GradeCalculatorTest {
             testsPassed++;
             System.out.println("  [PASS] " + message);
         } else {
+            testsFailed++;
             System.err.printf("  [FAIL] %s - Expected: %.4f, Got: %.4f\n", message, expected, actual);
         }
     }

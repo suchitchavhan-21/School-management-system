@@ -41,7 +41,7 @@ public class Admin extends javax.swing.JFrame {
         txt_pass = new javax.swing.JPasswordField();
         cmd_admin = new javax.swing.JButton();
 
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
 
         jLabel1.setText("If are a Admin,you can Delete Only.");
 
@@ -95,38 +95,59 @@ public class Admin extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void cmd_adminActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_adminActionPerformed
-        // TODO add your handling code here:
-        
-        
-        String sql="select * from Admin where Password=?";
-        
-        try {
-            pst=conn.prepareStatement(sql);
+    /**
+     * Modal dialog to verify Administrator credentials before permitting sensitive actions.
+     * Returns true if authorized, false otherwise.
+     */
+    public static boolean verifyAdmin(Component parent, Connection conn) {
+        JPasswordField pf = new JPasswordField();
+        int okCxl = JOptionPane.showConfirmDialog(
+            parent,
+            new Object[]{"This action requires Administrator authorization.\nPlease enter Admin Password / PIN:", pf},
+            "Administrator Authorization Required",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.WARNING_MESSAGE
+        );
 
-            pst.setString(1, txt_pass.getText());
-
-            rs=pst.executeQuery();
-            if(rs.next()){
-                JOptionPane.showMessageDialog(null, "Log in Successful.");
-                rs.close();
-                pst.close();
-              
-                close();
-
+        if (okCxl == JOptionPane.OK_OPTION) {
+            char[] pwd = pf.getPassword();
+            try {
+                boolean valid = PasswordSecurity.authenticateAndMigrateAdmin(conn, pwd);
+                if (valid) {
+                    return true;
+                } else {
+                    JOptionPane.showMessageDialog(parent, "Invalid Administrator Password. Action cancelled.", "Authorization Denied", JOptionPane.ERROR_MESSAGE);
+                    return false;
+                }
+            } finally {
+                PasswordSecurity.wipe(pwd);
             }
-            else{
-                JOptionPane.showMessageDialog(null, "You Enter Worng Password.");
+        }
+        return false;
+    }
 
+    private void cmd_adminActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cmd_adminActionPerformed
+        char[] password = txt_pass.getPassword();
+        if (password.length == 0) {
+            JOptionPane.showMessageDialog(this, "Please enter Admin Password.", "Input Required", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            boolean authenticated = PasswordSecurity.authenticateAndMigrateAdmin(conn, password);
+            if (authenticated) {
+                JOptionPane.showMessageDialog(this, "Admin Verification Successful.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                close();
+            } else {
+                JOptionPane.showMessageDialog(this, "Invalid Admin Password.", "Authentication Failed", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception e) {
-            
-            JOptionPane.showMessageDialog(null, e);
- 
+            JOptionPane.showMessageDialog(this, "Error processing authentication request.", "Error", JOptionPane.ERROR_MESSAGE);
+            System.err.println("[Admin] Authentication error: " + e.getMessage());
+        } finally {
+            PasswordSecurity.wipe(password);
+            txt_pass.setText("");
         }
-        
-
-        
     }//GEN-LAST:event_cmd_adminActionPerformed
 
     /**
