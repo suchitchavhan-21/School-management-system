@@ -33,26 +33,32 @@
 | **TST-02** | `test/SecurityAndResilienceTest.java:97, 134` | Test Quality | **HIGH** | **CONFIRMED** | `if (conn == null) return;` skips test silently without failing. | Remove silent early returns; assert connection non-null. |
 | **TST-03** | `test/ExamMarksDAOTest.java:24`, `test/SecurityAndResilienceTest.java:50` | Test Isolation | **HIGH** | **CONFIRMED** | Integration tests execute against the live application database `student_database.sqlite`. | Provide dedicated isolated test database (`test_student_database.sqlite`) cleaned before/after tests. |
 | **TST-04** | `test/SystemTestSuite.java:20-35` | Test Reporting | **MEDIUM** | **CONFIRMED** | Test runner does not separate Passed, Failed, and Skipped test metrics. | Add full accounting of passed, failed, and skipped tests with nonzero exit code on failure. |
+| **SEC-07** | `src/PasswordSecurity.java` | Security / DoS | **HIGH** | **CONFIRMED** | Unbounded iteration counts and unvalidated stored hash format could trigger CPU exhaustion or unhandled exceptions. | Added `isValidHashFormat` pre-computation check and bounded iterations [10,000, 2,000,000]. |
+| **SEC-08** | `src/FirstRunSetupDialog.java`, `PasswordSecurity.java` | Data Integrity | **HIGH** | **CONFIRMED** | First-run setup created user and admin in separate statements without transactional rollback on partial failure. | Implemented `initializeFirstRunCredentials` with atomic transaction commit and rollback on failure. |
+| **SEC-09** | `src/FirstRunSetupDialog.java` | Security | **HIGH** | **CONFIRMED** | Four-character minimum and short PIN permitted weak administrator credentials. | Enforced strong password and master key policy (minimum 8 characters, mixed case, numbers/symbols). |
+| **SEC-10** | `src/PasswordSecurity.java` | Memory Security | **MEDIUM** | **CONFIRMED** | Legacy password check created immutable String on heap; `PBEKeySpec` was not cleared in finally block. | Implemented `constantTimeCharEquals` and invoked `spec.clearPassword()` in finally block. |
+| **DB-07** | `src/DatabaseBootstrap.java` | Reliability | **HIGH** | **CONFIRMED** | Schema bootstrap swallowed exceptions and returned void, allowing app to proceed with incomplete tables. | Propagated `SQLException`, verified table queries, and closed failed connections. |
+| **TST-05** | `test/ExamMarksDAOTest.java`, `test/SecurityAndResilienceTest.java` | Test Safety | **HIGH** | **CONFIRMED** | Test runner deleted hardcoded filenames, risking deletion of pre-existing user files. | Switched to unique `File.createTempFile` with safe connection closing and verified pre-existing file preservation. |
 
 ---
 
 ## 2. Remediation and Verification Summary
 
-All 20 verified findings have been completely remediated and validated:
+All 26 verified findings have been completely remediated and validated:
 
 | Category | Issues Remediated | Key Changes Applied | Verification Status |
 |---|---|---|---|
-| **Security & Authentication** | SEC-01, SEC-02, SEC-03, SEC-06 | Created `src/PasswordSecurity.java` (PBKDF2-HMAC-SHA256, 65,536 iterations, 16-byte random salt). Migrated all `JPasswordField.getText()` to `getPassword()` with memory wipe. Added `FirstRunSetupDialog.java` for secure first-run setup. Removed hardcoded credentials. | **VERIFIED (100% Passed)** |
-| **Authorization & Control** | SEC-04, SEC-05 | Changed `Admin.java` close operation to `DISPOSE_ON_CLOSE`. Added `Admin.verifyAdmin(Component, Connection)` and enforced administrator privilege verification on record deletion in Students, Teachers, and Employees modules. | **VERIFIED (100% Passed)** |
-| **Database & Resilience** | DB-01, DB-02, DB-03, DB-04 | Replaced silent MySQL->SQLite fallback with `database.properties` explicit configuration. Fails safely on database connection error. Removed dummy seed records. Dialect-aware DDL for MySQL and SQLite. | **VERIFIED (100% Passed)** |
+| **Security & Authentication** | SEC-01, SEC-02, SEC-03, SEC-06, SEC-07, SEC-09, SEC-10 | Salted PBKDF2-HMAC-SHA256 (210,000 iterations), format pre-validation, iteration limits [10,000, 2,000,000], `spec.clearPassword()` in finally, `constantTimeCharEquals`, strong password/key policy (min 8 chars), transparent legacy and 65k-hash auto-migration. | **VERIFIED (100% Passed)** |
+| **Authorization & Control** | SEC-04, SEC-05 | Changed `Admin.java` close operation to `DISPOSE_ON_CLOSE`. Added `Admin.verifyAdmin(Component, Connection)` and enforced administrator privilege verification on record deletion in Students, Teachers, Employees, and Grades modules. | **VERIFIED (100% Passed)** |
+| **Database & Resilience** | DB-01, DB-02, DB-03, DB-04, DB-07, SEC-08 | Replaced silent MySQL->SQLite fallback with `database.properties`. Fails safely on database connection error. Removed dummy seed records. Dialect-aware DDL. Propagated `DatabaseBootstrap` SQLExceptions. Atomic transactional first-run setup. | **VERIFIED (100% Passed)** |
 | **Resource Management** | DB-05, DB-06 | Converted all `PreparedStatement` and `ResultSet` usages to try-with-resources. Eliminated unused `javaconnect.connerDb()` leaks in `Help.java` and `Students_and_Teachers_Management.java`. | **VERIFIED (100% Passed)** |
 | **Data Integrity & Validation** | FUNC-03, FUNC-04, GRD-01 | Added strict input validation for student roll, teacher ID, and employee ID (non-empty, positive integers). Enforced authoritative existence check and retrieval of official name/class in `Student_Grades_System.saveRecord()`. | **VERIFIED (100% Passed)** |
-| **Build & Test Portability** | BLD-01, TST-01, TST-02, TST-03, TST-04 | Replaced absolute `D:\` paths with portable relative paths in `nbproject/project.properties`. Upgraded test suite with dedicated temporary databases (`test_exam_marks.sqlite`, `test_security.sqlite`), genuine assertions, and structured pass/fail accounting. | **VERIFIED (100% Passed)** |
+| **Build & Test Portability** | BLD-01, TST-01, TST-02, TST-03, TST-04, TST-05 | Replaced absolute `D:\` paths with portable relative paths in `nbproject/project.properties`. Upgraded test suite with unique temporary databases (`File.createTempFile`), genuine assertions, pre-existing file preservation test, and structured pass/fail accounting. | **VERIFIED (100% Passed)** |
 
 ### Final Automated Test Results:
 - `GradeCalculatorTest`: 36 Passed, 0 Failed, 0 Skipped (36 Total)
 - `ExamMarksDAOTest`: 20 Passed, 0 Failed, 0 Skipped (20 Total)
-- `SecurityAndResilienceTest`: 32 Passed, 0 Failed, 0 Skipped (32 Total)
-- **Total Suite Execution**: **88 Passed, 0 Failed, 0 Skipped** (Exit Code: 0)
+- `SecurityAndResilienceTest`: 65 Passed, 0 Failed, 0 Skipped (65 Total)
+- **Total Suite Execution**: **121 Passed, 0 Failed, 0 Skipped** (Exit Code: 0)
 
 

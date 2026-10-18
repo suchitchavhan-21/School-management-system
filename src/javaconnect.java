@@ -42,15 +42,24 @@ public class javaconnect {
      * Prevents testing operations from altering or risking production databases.
      */
     public static Connection getTestConnection(String testDbName) {
+        Connection conn = null;
         try {
             Class.forName("org.sqlite.JDBC");
-            Connection conn = DriverManager.getConnection("jdbc:sqlite:" + testDbName);
+            conn = DriverManager.getConnection("jdbc:sqlite:" + testDbName);
             DatabaseBootstrap.bootstrap(conn);
             return conn;
         } catch (Exception e) {
+            if (conn != null) {
+                try { conn.close(); } catch (Exception ignored) {}
+            }
             System.err.println("[javaconnect] Error opening test database: " + e.getMessage());
             return null;
         }
+    }
+
+    public static Connection getTestConnection(File testDbFile) {
+        if (testDbFile == null) return null;
+        return getTestConnection(testDbFile.getAbsolutePath());
     }
 
     private static Connection connectMySQL(Properties props) {
@@ -64,17 +73,21 @@ public class javaconnect {
         String url = String.format("jdbc:mysql://%s:%s/%s?zeroDateTimeBehavior=convertToNull&useSSL=%s",
                 host, port, db, useSSL);
 
+        Connection conn = null;
         try {
             Class.forName("com.mysql.jdbc.Driver");
-            Connection conn = DriverManager.getConnection(url, user, pass);
+            conn = DriverManager.getConnection(url, user, pass);
+            DatabaseBootstrap.bootstrap(conn);
             activeDbType = "MySQL (" + host + ":" + port + "/" + db + ")";
             System.out.println("[javaconnect] Connected successfully to configured MySQL database.");
-            DatabaseBootstrap.bootstrap(conn);
             return conn;
         } catch (Exception e) {
+            if (conn != null) {
+                try { conn.close(); } catch (Exception ignored) {}
+            }
             activeDbType = "FAILED";
             String errorMsg = String.format(
-                "Unable to connect to the configured MySQL database on %s:%s/%s.\n" +
+                "Unable to connect to or initialize the configured MySQL database on %s:%s/%s.\n" +
                 "Error: %s\n\n" +
                 "The system will NOT silently switch databases to prevent data corruption or exposure.\n" +
                 "Please verify your MySQL server status and configuration in 'database.properties'.",
@@ -89,16 +102,20 @@ public class javaconnect {
     }
 
     private static Connection connectSQLite(String fileName) {
+        Connection conn = null;
         try {
             Class.forName("org.sqlite.JDBC");
-            Connection conn = DriverManager.getConnection("jdbc:sqlite:" + fileName);
+            conn = DriverManager.getConnection("jdbc:sqlite:" + fileName);
+            DatabaseBootstrap.bootstrap(conn);
             activeDbType = "SQLite (" + fileName + ")";
             System.out.println("[javaconnect] Connected to SQLite database: " + fileName);
-            DatabaseBootstrap.bootstrap(conn);
             return conn;
         } catch (Exception e) {
+            if (conn != null) {
+                try { conn.close(); } catch (Exception ignored) {}
+            }
             activeDbType = "FAILED";
-            String errorMsg = "Unable to connect to SQLite database '" + fileName + "': " + e.getMessage();
+            String errorMsg = "Unable to connect to or bootstrap SQLite database '" + fileName + "': " + e.getMessage();
             System.err.println("[javaconnect] " + errorMsg);
             try {
                 JOptionPane.showMessageDialog(null, errorMsg, "Database Error", JOptionPane.ERROR_MESSAGE);

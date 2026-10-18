@@ -10,7 +10,7 @@ import java.util.List;
  */
 public class ExamMarksDAOTest {
 
-    private static final String TEST_DB_FILE = "test_exam_marks.sqlite";
+    private File tempDbFile;
 
     private int testsRun = 0;
     private int testsPassed = 0;
@@ -28,12 +28,21 @@ public class ExamMarksDAOTest {
         System.out.println("Running ExamMarksDAOTest (Isolated Test DB)...");
         System.out.println("==================================================");
 
-        cleanupTestDb();
-        Connection conn = javaconnect.getTestConnection(TEST_DB_FILE);
+        try {
+            tempDbFile = File.createTempFile("sms_exam_marks_", ".sqlite");
+            tempDbFile.deleteOnExit();
+        } catch (Exception e) {
+            System.err.println("  [FAIL] Unable to create unique temporary test database: " + e.getMessage());
+            testsFailed++;
+            return false;
+        }
+
+        Connection conn = javaconnect.getTestConnection(tempDbFile);
 
         if (conn == null) {
             System.err.println("  [FAIL] Unable to acquire isolated test database connection.");
             testsFailed++;
+            cleanupTestDb();
             return false;
         }
 
@@ -89,9 +98,8 @@ public class ExamMarksDAOTest {
     }
 
     private void cleanupTestDb() {
-        File file = new File(TEST_DB_FILE);
-        if (file.exists()) {
-            file.delete();
+        if (tempDbFile != null && tempDbFile.exists()) {
+            tempDbFile.delete();
         }
     }
 

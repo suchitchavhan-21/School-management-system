@@ -8,6 +8,8 @@ import javax.swing.*;
 /**
  * First-Run Administrator Account Setup Dialog.
  * Prompts administrator to configure initial secure credentials when no accounts exist.
+ * Enforces strong password and master key policies, wipes sensitive memory on all exit paths,
+ * and delegates to transactional credential initialization.
  */
 public class FirstRunSetupDialog extends JDialog {
 
@@ -27,7 +29,7 @@ public class FirstRunSetupDialog extends JDialog {
     }
 
     private void initComponents() {
-        setSize(480, 380);
+        setSize(520, 420);
         setLocationRelativeTo(getParent());
         setResizable(false);
         setLayout(new BorderLayout(10, 10));
@@ -41,7 +43,7 @@ public class FirstRunSetupDialog extends JDialog {
         titleLabel.setForeground(Color.WHITE);
         headerPanel.add(titleLabel, BorderLayout.WEST);
 
-        JLabel subLabel = new JLabel("Create initial secure credentials to initialize the system.");
+        JLabel subLabel = new JLabel("Initialize master administrator and authorization credentials. Strong credentials are required.");
         subLabel.setFont(new Font("Tahoma", Font.PLAIN, 11));
         subLabel.setForeground(new Color(236, 240, 241));
         headerPanel.add(subLabel, BorderLayout.SOUTH);
@@ -50,43 +52,43 @@ public class FirstRunSetupDialog extends JDialog {
         JPanel formPanel = new JPanel(new GridBagLayout());
         formPanel.setBorder(BorderFactory.createEmptyBorder(15, 20, 10, 20));
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(6, 6, 6, 6);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Username
         gbc.gridx = 0; gbc.gridy = 0;
-        formPanel.add(new JLabel("Login Username:"), gbc);
+        formPanel.add(new JLabel("Administrator Username:"), gbc);
         gbc.gridx = 1;
-        txt_username = new JTextField(15);
+        txt_username = new JTextField(16);
         txt_username.setText("admin");
         formPanel.add(txt_username, gbc);
 
         // Login Password
         gbc.gridx = 0; gbc.gridy = 1;
-        formPanel.add(new JLabel("Login Password:"), gbc);
+        formPanel.add(new JLabel("Login Password (min 8 chars):"), gbc);
         gbc.gridx = 1;
-        txt_password = new JPasswordField(15);
+        txt_password = new JPasswordField(16);
         formPanel.add(txt_password, gbc);
 
         // Confirm Login Password
         gbc.gridx = 0; gbc.gridy = 2;
-        formPanel.add(new JLabel("Confirm Password:"), gbc);
+        formPanel.add(new JLabel("Confirm Login Password:"), gbc);
         gbc.gridx = 1;
-        txt_confirm_password = new JPasswordField(15);
+        txt_confirm_password = new JPasswordField(16);
         formPanel.add(txt_confirm_password, gbc);
 
-        // Admin Security PIN / Master Password
+        // Admin Security Key / Master Authorization Password
         gbc.gridx = 0; gbc.gridy = 3;
-        formPanel.add(new JLabel("Admin Delete PIN:"), gbc);
+        formPanel.add(new JLabel("Admin Authorization Key (min 8 chars):"), gbc);
         gbc.gridx = 1;
-        txt_admin_key = new JPasswordField(15);
+        txt_admin_key = new JPasswordField(16);
         formPanel.add(txt_admin_key, gbc);
 
-        // Confirm Admin Security PIN
+        // Confirm Admin Security Key
         gbc.gridx = 0; gbc.gridy = 4;
-        formPanel.add(new JLabel("Confirm Admin PIN:"), gbc);
+        formPanel.add(new JLabel("Confirm Authorization Key:"), gbc);
         gbc.gridx = 1;
-        txt_confirm_admin_key = new JPasswordField(15);
+        txt_confirm_admin_key = new JPasswordField(16);
         formPanel.add(txt_confirm_admin_key, gbc);
 
         add(formPanel, BorderLayout.CENTER);
@@ -116,50 +118,63 @@ public class FirstRunSetupDialog extends JDialog {
         String username = txt_username.getText().trim();
         char[] pwd = txt_password.getPassword();
         char[] confirmPwd = txt_confirm_password.getPassword();
-        char[] adminPin = txt_admin_key.getPassword();
-        char[] confirmAdminPin = txt_confirm_admin_key.getPassword();
+        char[] adminKey = txt_admin_key.getPassword();
+        char[] confirmAdminKey = txt_confirm_admin_key.getPassword();
 
         try {
             if (username.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Username cannot be blank.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Administrator username cannot be blank.", "Validation Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            if (pwd.length < 4) {
-                JOptionPane.showMessageDialog(this, "Password must be at least 4 characters long.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            // Strong password policy check
+            PasswordSecurity.ValidationResult pwdVal = PasswordSecurity.validatePasswordStrength(pwd);
+            if (!pwdVal.valid) {
+                JOptionPane.showMessageDialog(this, pwdVal.message, "Password Security Policy", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
             if (!Arrays.equals(pwd, confirmPwd)) {
-                JOptionPane.showMessageDialog(this, "Login passwords do not match.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Login passwords do not match. Please re-enter.", "Validation Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            if (adminPin.length < 4) {
-                JOptionPane.showMessageDialog(this, "Admin PIN must be at least 4 characters long.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            // Strong admin authorization key policy check
+            PasswordSecurity.ValidationResult keyVal = PasswordSecurity.validateAdminKeyStrength(adminKey);
+            if (!keyVal.valid) {
+                JOptionPane.showMessageDialog(this, keyVal.message, "Authorization Key Policy", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            if (!Arrays.equals(adminPin, confirmAdminPin)) {
-                JOptionPane.showMessageDialog(this, "Admin PINs do not match.", "Validation Error", JOptionPane.ERROR_MESSAGE);
+            if (!Arrays.equals(adminKey, confirmAdminKey)) {
+                JOptionPane.showMessageDialog(this, "Administrator authorization keys do not match. Please re-enter.", "Validation Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            // Register initial credentials using PBKDF2 salted hash
-            PasswordSecurity.registerUser(conn, username, pwd);
-            PasswordSecurity.setAdminPassword(conn, adminPin);
-
-            JOptionPane.showMessageDialog(this, "Initial administrator setup completed successfully!\nPlease log in with your new credentials.", "Success", JOptionPane.INFORMATION_MESSAGE);
-            setupCompleted = true;
-            dispose();
+            // Atomic transactional setup of both accounts
+            boolean success = PasswordSecurity.initializeFirstRunCredentials(conn, username, pwd, adminKey);
+            if (success) {
+                JOptionPane.showMessageDialog(this,
+                        "Initial administrator setup completed successfully!\nPlease log in using your newly configured credentials.",
+                        "Setup Success", JOptionPane.INFORMATION_MESSAGE);
+                setupCompleted = true;
+                dispose();
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Setup failed to save credentials. No partial changes were committed.",
+                        "Database Transaction Error", JOptionPane.ERROR_MESSAGE);
+            }
 
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Setup error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "An error occurred while saving administrator setup: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
         } finally {
+            // Memory hygiene: Wipe all sensitive password arrays on every exit path
             PasswordSecurity.wipe(pwd);
             PasswordSecurity.wipe(confirmPwd);
-            PasswordSecurity.wipe(adminPin);
-            PasswordSecurity.wipe(confirmAdminPin);
+            PasswordSecurity.wipe(adminKey);
+            PasswordSecurity.wipe(confirmAdminKey);
         }
     }
 

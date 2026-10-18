@@ -1,41 +1,42 @@
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
  * Handles database bootstrapping and schema initialization.
  * Automatically verifies and creates required tables without hardcoding default production credentials or sample records.
+ * Propagates initialization failures to prevent application from proceeding with incomplete schemas.
  */
 public class DatabaseBootstrap {
 
-    public static void initialize(Connection conn) {
-        bootstrap(conn);
+    public static boolean initialize(Connection conn) throws SQLException {
+        return bootstrap(conn);
     }
 
-    public static void bootstrap(Connection conn) {
-        if (conn == null) {
-            System.err.println("[DatabaseBootstrap] Connection is null. Skipping bootstrap.");
-            return;
+    public static boolean bootstrap(Connection conn) throws SQLException {
+        if (conn == null || conn.isClosed()) {
+            throw new SQLException("[DatabaseBootstrap] Cannot bootstrap schema: database connection is null or closed.");
         }
 
+        System.out.println("[DatabaseBootstrap] Ensuring database tables exist...");
+
+        boolean isMySQL = false;
+        try {
+            DatabaseMetaData meta = conn.getMetaData();
+            if (meta != null && meta.getDatabaseProductName() != null) {
+                isMySQL = meta.getDatabaseProductName().toLowerCase().contains("mysql");
+            }
+        } catch (Exception ignored) {}
+
         try (Statement stmt = conn.createStatement()) {
-            System.out.println("[DatabaseBootstrap] Ensuring database tables exist...");
-
-            boolean isMySQL = false;
-            try {
-                DatabaseMetaData meta = conn.getMetaData();
-                if (meta != null && meta.getDatabaseProductName() != null) {
-                    isMySQL = meta.getDatabaseProductName().toLowerCase().contains("mysql");
-                }
-            } catch (Exception ignored) {}
-
             // 1. pass table (user credentials)
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS pass (" +
                     "Username VARCHAR(50) NOT NULL PRIMARY KEY, " +
                     "Password VARCHAR(255) NOT NULL" +
                     ")");
 
-            // 2. admin table (admin authorization PIN / password)
+            // 2. admin table (admin authorization master key / password)
             stmt.executeUpdate("CREATE TABLE IF NOT EXISTS admin (" +
                     "Password VARCHAR(255) NOT NULL" +
                     ")");
@@ -103,11 +104,24 @@ public class DatabaseBootstrap {
                     "UNIQUE(Roll, Exam_term, Exam_year)" +
                     ")");
 
-            System.out.println("[DatabaseBootstrap] Database schema check completed successfully.");
+            // Rigorously verify that all required tables exist and can be queried
+            String[] requiredTables = {"pass", "admin", "student_info", "teacher_info", "employee_info", "exam_marks"};
+            for (String table : requiredTables) {
+                try (Statement testStmt = conn.createStatement()) {
+                    testStmt.execute("SELECT 1 FROM " + table + " LIMIT 1");
+                } catch (SQLException e) {
+                    throw new SQLException("[DatabaseBootstrap] Verification failed: table '" + table + "' is missing or inaccessible.", e);
+                }
+            }
 
+            System.out.println("[DatabaseBootstrap] Database schema check completed successfully.");
+            return true;
+        } catch (SQLException e) {
+            System.err.println("[DatabaseBootstrap] Critical error during bootstrap: " + e.getMessage());
+            throw e;
         } catch (Exception e) {
-            System.err.println("[DatabaseBootstrap] Error during bootstrap: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("[DatabaseBootstrap] Critical error during bootstrap: " + e.getMessage());
+            throw new SQLException("[DatabaseBootstrap] Unexpected error during bootstrap: " + e.getMessage(), e);
         }
     }
 }

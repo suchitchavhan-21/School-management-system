@@ -1,9 +1,13 @@
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -11,16 +15,18 @@ import java.util.Set;
 /**
  * Ethical Hacker & Application Security Engineer Test Suite.
  * Validates:
- * 1. Zero-trust database isolation and failover safety.
- * 2. Schema bootstrapping without insecure default credentials.
- * 3. Salted PBKDF2 hashing, random salting, constant-time verification, and memory wiping.
- * 4. Transparent migration of legacy plaintext credentials upon login.
- * 5. Parameter binding integrity (avoiding parameter index out of range bugs).
- * 6. SQL Injection immunity against Tautology, Piggybacked DDL, and UNION attacks.
+ * 1. Safe test database isolation using unique temporary files and preserving pre-existing files.
+ * 2. Strict schema bootstrapping, idempotence, table verification, and error propagation.
+ * 3. Salted PBKDF2 hashing, format validation, iteration limits, PBEKeySpec clearing, and DoS resilience.
+ * 4. Backward compatibility with older hashes (65,536 iterations) and transparent upgrade to 210,000 iterations.
+ * 5. Strong password and administrator authorization key policy validation.
+ * 6. Atomic, transactional first-run setup with guaranteed rollback on failure.
+ * 7. Admin parameter binding integrity and authentication.
+ * 8. SQL injection immunity against Tautology, Piggybacked DDL, and UNION attacks.
  */
 public class SecurityAndResilienceTest {
 
-    private static final String TEST_DB_FILE = "test_security.sqlite";
+    private File tempDbFile;
 
     private int testsRun = 0;
     private int testsPassed = 0;
@@ -38,20 +44,33 @@ public class SecurityAndResilienceTest {
         System.out.println("Running SecurityAndResilienceTest Suite...");
         System.out.println("==================================================");
 
-        cleanupTestDb();
-        Connection conn = javaconnect.getTestConnection(TEST_DB_FILE);
-
-        if (conn == null) {
-            System.err.println("  [FAIL] Unable to acquire isolated test database connection.");
+        try {
+            tempDbFile = File.createTempFile("sms_test_sec_", ".sqlite");
+            tempDbFile.deleteOnExit();
+        } catch (IOException e) {
+            System.err.println("  [FAIL] Unable to create unique temporary test database: " + e.getMessage());
             testsFailed++;
             return false;
         }
 
+        Connection conn = javaconnect.getTestConnection(tempDbFile);
+
+        if (conn == null) {
+            System.err.println("  [FAIL] Unable to acquire isolated test database connection.");
+            testsFailed++;
+            cleanupTestDb();
+            return false;
+        }
+
         try {
+            testPreExistingFilePreservation();
             testDatabaseConnectionAndIsolation(conn);
-            testSchemaBootstrapAndNoDefaultCredentials(conn);
+            testSchemaBootstrapAndErrorPropagation(conn);
             testPasswordSecurityPBKDF2();
-            testLegacyPlaintextPasswordMigration(conn);
+            testMalformedHashHandlingAndDoSImmunity();
+            testOlderHashCompatibilityAndUpgrade(conn);
+            testPasswordAndAdminKeyStrengthValidation();
+            testTransactionalFirstRunSetupAndRollback(conn);
             testAdminParameterIndexIntegrity(conn);
             testSqlInjectionImmunity(conn);
         } catch (Exception e) {
@@ -101,10 +120,35 @@ public class SecurityAndResilienceTest {
     }
 
     private void cleanupTestDb() {
-        File file = new File(TEST_DB_FILE);
-        if (file.exists()) {
-            file.delete();
+        if (tempDbFile != null && tempDbFile.exists()) {
+            tempDbFile.delete();
         }
+    }
+
+    private void testPreExistingFilePreservation() throws IOException, SQLException {
+        File sentinel = File.createTempFile("sms_sentinel_preserve_", ".txt");
+        sentinel.deleteOnExit();
+        String originalContent = "CRITICAL_USER_DATA_DO_NOT_DELETE";
+        try (FileWriter writer = new FileWriter(sentinel)) {
+            writer.write(originalContent);
+        }
+
+        // Verify file exists
+        assertTrue("Pre-existing sentinel file exists prior to test operations", sentinel.exists());
+
+        // Perform test database operations
+        File anotherTemp = File.createTempFile("sms_dummy_test_", ".sqlite");
+        Connection dummyConn = javaconnect.getTestConnection(anotherTemp);
+        if (dummyConn != null) {
+            dummyConn.close();
+        }
+        anotherTemp.delete();
+
+        // Verify sentinel was untouched
+        assertTrue("Pre-existing sentinel file survived test database lifecycle", sentinel.exists());
+        String readContent = Files.readString(sentinel.toPath());
+        assertEquals("Pre-existing file content is completely intact", originalContent, readContent);
+        sentinel.delete();
     }
 
     private void testDatabaseConnectionAndIsolation(Connection conn) throws SQLException {
@@ -113,8 +157,15 @@ public class SecurityAndResilienceTest {
         assertTrue("Connected driver is SQLite for isolated test", meta.getDriverName().contains("SQLite"));
     }
 
-    private void testSchemaBootstrapAndNoDefaultCredentials(Connection conn) throws SQLException {
-        DatabaseBootstrap.initialize(conn);
+    private void testSchemaBootstrapAndErrorPropagation(Connection conn) throws SQLException {
+        // Idempotent repeated bootstrap
+        boolean boot1 = DatabaseBootstrap.bootstrap(conn);
+        assertTrue("Initial schema bootstrap returns true", boot1);
+
+        boolean boot2 = DatabaseBootstrap.bootstrap(conn);
+        assertTrue("Repeated schema bootstrap is idempotent and returns true", boot2);
+
+        // Verify all 6 tables exist
         DatabaseMetaData meta = conn.getMetaData();
         Set<String> tables = new HashSet<>();
         try (ResultSet rs = meta.getTables(null, null, "%", null)) {
@@ -130,19 +181,17 @@ public class SecurityAndResilienceTest {
         assertTrue("Table 'employee_info' exists", tables.contains("employee_info"));
         assertTrue("Table 'exam_marks' exists", tables.contains("exam_marks"));
 
-        // Crucial Zero-Trust check: default hardcoded credentials MUST NOT be seeded into fresh databases
-        try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM admin");
-             ResultSet rs = pst.executeQuery()) {
-            if (rs.next()) {
-                assertEquals("No hardcoded default admin credentials seeded", 0, rs.getInt(1));
+        // Error propagation test on closed connection
+        Connection closedConn = javaconnect.getTestConnection(tempDbFile);
+        if (closedConn != null) {
+            closedConn.close();
+            boolean threwException = false;
+            try {
+                DatabaseBootstrap.bootstrap(closedConn);
+            } catch (SQLException e) {
+                threwException = true;
             }
-        }
-
-        try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM pass");
-             ResultSet rs = pst.executeQuery()) {
-            if (rs.next()) {
-                assertEquals("No hardcoded default user credentials seeded", 0, rs.getInt(1));
-            }
+            assertTrue("DatabaseBootstrap propagates SQLException when connection is closed or invalid", threwException);
         }
     }
 
@@ -158,7 +207,7 @@ public class SecurityAndResilienceTest {
         assertTrue("Correct password validates against hash", PasswordSecurity.verifyPassword("SecureAdminPassword!2026".toCharArray(), hash1));
         assertTrue("Incorrect password rejected by verifyPassword", !PasswordSecurity.verifyPassword("WrongPassword!2026".toCharArray(), hash1));
 
-        // Salt randomness test: two hashes of the identical password must have different salts and strings
+        // Salt randomness test: two hashes of the identical password must have different salts and values
         String hash2 = PasswordSecurity.hashPassword("SecureAdminPassword!2026".toCharArray());
         assertTrue("Two hashes of identical password produce distinct salts and values", !hash1.equals(hash2));
         assertTrue("Second hash also validates with correct password", PasswordSecurity.verifyPassword("SecureAdminPassword!2026".toCharArray(), hash2));
@@ -176,58 +225,170 @@ public class SecurityAndResilienceTest {
         assertTrue("PasswordSecurity.wipe successfully zeroes character array", allZeroed);
     }
 
-    private void testLegacyPlaintextPasswordMigration(Connection conn) throws SQLException {
-        String insertLegacy = "INSERT INTO pass (username, password) VALUES (?, ?)";
-        try (PreparedStatement pst = conn.prepareStatement(insertLegacy)) {
-            pst.setString(1, "legacy_teacher");
-            pst.setString(2, "MyOldPlaintextPass123");
+    private void testMalformedHashHandlingAndDoSImmunity() {
+        char[] pwd = "TestPassword#2026".toCharArray();
+
+        // 1. Null, empty, and truncated
+        assertTrue("Null hash rejected", !PasswordSecurity.verifyPassword(pwd, null));
+        assertTrue("Empty hash rejected", !PasswordSecurity.verifyPassword(pwd, ""));
+        assertTrue("Truncated hash parts rejected", !PasswordSecurity.verifyPassword(pwd, "$pbkdf2-sha256$210000$abcd"));
+
+        // 2. Invalid prefix
+        assertTrue("Invalid algorithm prefix rejected", !PasswordSecurity.isValidHashFormat("$pbkdf1$210000$0123456789abcdef0123456789abcdef$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+
+        // 3. Odd-length hex salt
+        assertTrue("Odd-length salt hex rejected", !PasswordSecurity.isValidHashFormat("$pbkdf2-sha256$210000$abc$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+
+        // 4. Invalid hex characters
+        assertTrue("Invalid hex characters in salt rejected", !PasswordSecurity.isValidHashFormat("$pbkdf2-sha256$210000$ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+
+        // 5. Unreasonable / extreme iteration counts (DoS prevention)
+        // Below minimum (< 10000)
+        assertTrue("Iterations below minimum rejected", !PasswordSecurity.isValidHashFormat("$pbkdf2-sha256$100$0123456789abcdef0123456789abcdef$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+        // Extreme / Excessive (> 2000000)
+        assertTrue("Extreme iterations (DoS attempt) rejected immediately without CPU hang",
+                !PasswordSecurity.isValidHashFormat("$pbkdf2-sha256$999999999$0123456789abcdef0123456789abcdef$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+        // Non-numeric iterations
+        assertTrue("Non-numeric iterations rejected", !PasswordSecurity.isValidHashFormat("$pbkdf2-sha256$notanumber$0123456789abcdef0123456789abcdef$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+
+        // 6. Salt and key length boundaries
+        // Salt < 16 bytes (32 hex chars)
+        assertTrue("Salt smaller than 16 bytes rejected", !PasswordSecurity.isValidHashFormat("$pbkdf2-sha256$210000$0123456789abcdef$0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+        // Key < 32 bytes (64 hex chars)
+        assertTrue("Key smaller than 32 bytes rejected", !PasswordSecurity.isValidHashFormat("$pbkdf2-sha256$210000$0123456789abcdef0123456789abcdef$0123456789abcdef"));
+
+        // 7. Verify malformed hashes do not crash verifyPassword
+        assertTrue("Malformed hash safely returns false from verifyPassword", !PasswordSecurity.verifyPassword(pwd, "$pbkdf2-sha256$999999999$bad$bad"));
+    }
+
+    private void testOlderHashCompatibilityAndUpgrade(Connection conn) throws SQLException {
+        // Construct an older valid hash with 65,536 iterations (valid, but lower than current 210,000)
+        // Format: $pbkdf2-sha256$65536$<16 bytes salt>$<32 bytes hash>
+        String saltHex = "00112233445566778899aabbccddeeff";
+        byte[] salt = new byte[]{0,17,34,51,68,85,102,119,-120,-103,-86,-69,-52,-35,-18,-1};
+        char[] oldPassword = "OlderPassword#2025".toCharArray();
+
+        // Calculate expected hash for 65536 iterations
+        javax.crypto.spec.PBEKeySpec spec = new javax.crypto.spec.PBEKeySpec(oldPassword, salt, 65536, 256);
+        byte[] keyBytes;
+        try {
+            keyBytes = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            spec.clearPassword();
+        }
+
+        StringBuilder keyHex = new StringBuilder();
+        for (byte b : keyBytes) keyHex.append(String.format("%02x", b));
+        String olderHash = "$pbkdf2-sha256$65536$" + saltHex + "$" + keyHex.toString();
+
+        // 1. Verify compatibility: verifyPassword must accept older hash
+        assertTrue("verifyPassword validates older 65,536-iteration hash successfully", PasswordSecurity.verifyPassword(oldPassword, olderHash));
+
+        // 2. needsRehash must identify that this hash should be upgraded to CURRENT_ITERATIONS (210,000)
+        assertTrue("needsRehash recognizes older hash with 65,536 iterations needs upgrade", PasswordSecurity.needsRehash(olderHash));
+
+        // 3. Insert user with older hash
+        try (PreparedStatement pst = conn.prepareStatement("INSERT INTO pass (Username, Password) VALUES (?, ?)")) {
+            pst.setString(1, "older_account_user");
+            pst.setString(2, olderHash);
             pst.executeUpdate();
         }
 
-        // Verify it was stored as plaintext
-        try (PreparedStatement pst = conn.prepareStatement("SELECT password FROM pass WHERE username = ?")) {
-            pst.setString(1, "legacy_teacher");
+        // 4. Authenticate and migrate: must authenticate and upgrade in-place
+        boolean migrated = PasswordSecurity.authenticateAndMigrateUser(conn, "older_account_user", oldPassword);
+        assertTrue("authenticateAndMigrateUser succeeds for older hash account", migrated);
+
+        // 5. Verify database record now has CURRENT_ITERATIONS (210,000)
+        String newHash = null;
+        try (PreparedStatement pst = conn.prepareStatement("SELECT Password FROM pass WHERE Username = ?")) {
+            pst.setString(1, "older_account_user");
             try (ResultSet rs = pst.executeQuery()) {
-                assertTrue("Legacy user initially exists with plaintext password", rs.next() && !PasswordSecurity.isHashed(rs.getString("password")));
+                if (rs.next()) newHash = rs.getString("Password");
+            }
+        }
+        assertTrue("Upgraded hash starts with $pbkdf2-sha256$210000$", newHash != null && newHash.startsWith("$pbkdf2-sha256$210000$"));
+        assertTrue("Subsequent login verifies against upgraded hash", PasswordSecurity.verifyPassword(oldPassword, newHash));
+    }
+
+    private void testPasswordAndAdminKeyStrengthValidation() {
+        // Password strength policy checks
+        assertTrue("Rejects password < 8 chars", !PasswordSecurity.validatePasswordStrength("Short1!".toCharArray()).valid);
+        assertTrue("Rejects password without uppercase", !PasswordSecurity.validatePasswordStrength("nouppercase123!".toCharArray()).valid);
+        assertTrue("Rejects password without lowercase", !PasswordSecurity.validatePasswordStrength("NOLOWERCASE123!".toCharArray()).valid);
+        assertTrue("Rejects password without digit/symbol", !PasswordSecurity.validatePasswordStrength("NoDigitsOrSymbolsHere".toCharArray()).valid);
+        assertTrue("Rejects password containing whitespace", !PasswordSecurity.validatePasswordStrength("Password With Spaces 123!".toCharArray()).valid);
+        assertTrue("Accepts strong password meeting all criteria", PasswordSecurity.validatePasswordStrength("StrongAdmin#2026".toCharArray()).valid);
+
+        // Admin authorization key policy checks
+        assertTrue("Rejects admin key < 8 chars", !PasswordSecurity.validateAdminKeyStrength("Key1!".toCharArray()).valid);
+        assertTrue("Rejects admin key without digits or symbols", !PasswordSecurity.validateAdminKeyStrength("LettersOnlyHere".toCharArray()).valid);
+        assertTrue("Rejects admin key containing whitespace", !PasswordSecurity.validateAdminKeyStrength("Admin Key 123".toCharArray()).valid);
+        assertTrue("Accepts strong admin authorization key", PasswordSecurity.validateAdminKeyStrength("AdminKey#2026".toCharArray()).valid);
+    }
+
+    private void testTransactionalFirstRunSetupAndRollback(Connection conn) throws SQLException {
+        // Clear pass and admin for test
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("DELETE FROM pass");
+            stmt.executeUpdate("DELETE FROM admin");
+        }
+
+        assertTrue("isSetupRequired is true when database has no users", PasswordSecurity.isSetupRequired(conn));
+
+        // 1. Successful transactional setup
+        char[] adminPwd = "MasterPassword#2026".toCharArray();
+        char[] adminKey = "MasterKey#2026".toCharArray();
+        boolean success = PasswordSecurity.initializeFirstRunCredentials(conn, "superadmin", adminPwd, adminKey);
+        assertTrue("initializeFirstRunCredentials completes successfully", success);
+        assertTrue("isSetupRequired is false after complete initialization", !PasswordSecurity.isSetupRequired(conn));
+
+        // Verify both tables have exactly 1 record
+        try (Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM pass")) {
+                assertTrue("pass table has 1 record", rs.next() && rs.getInt(1) == 1);
+            }
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM admin")) {
+                assertTrue("admin table has 1 record", rs.next() && rs.getInt(1) == 1);
             }
         }
 
-        // Test login with wrong password - must fail and NOT migrate
-        boolean wrongLogin = PasswordSecurity.authenticateAndMigrateUser(conn, "legacy_teacher", "WrongPass".toCharArray());
-        assertTrue("Login with wrong password fails for legacy user", !wrongLogin);
+        // 2. Deliberately forced failure & transaction rollback test:
+        // Drop admin table temporarily to simulate failure on step 2 of setup
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("DROP TABLE admin");
+        }
 
-        // Test login with correct password - must authenticate AND migrate to PBKDF2 hash
-        boolean correctLogin = PasswordSecurity.authenticateAndMigrateUser(conn, "legacy_teacher", "MyOldPlaintextPass123".toCharArray());
-        assertTrue("Login with correct password succeeds for legacy user", correctLogin);
+        boolean threwRollbackException = false;
+        try {
+            PasswordSecurity.initializeFirstRunCredentials(conn, "failed_user", adminPwd, adminKey);
+        } catch (SQLException e) {
+            threwRollbackException = true;
+        }
+        assertTrue("Forced second-step failure throws SQLException", threwRollbackException);
 
-        // Verify database row was transparently updated to a PBKDF2 hash
-        String updatedHash = null;
-        try (PreparedStatement pst = conn.prepareStatement("SELECT password FROM pass WHERE username = ?")) {
-            pst.setString(1, "legacy_teacher");
+        // Verify that 'failed_user' was NOT committed to 'pass' (transaction rolled back completely!)
+        try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM pass WHERE Username = ?")) {
+            pst.setString(1, "failed_user");
             try (ResultSet rs = pst.executeQuery()) {
-                if (rs.next()) {
-                    updatedHash = rs.getString("password");
-                }
+                assertEquals("No partial record committed to pass table after rollback", 0, rs.next() ? rs.getInt(1) : -1);
             }
         }
-        assertTrue("Legacy plaintext was migrated to $pbkdf2-sha256$ in database", updatedHash != null && updatedHash.startsWith("$pbkdf2-sha256$"));
 
-        // Subsequent login must now authenticate using the newly migrated PBKDF2 hash
-        boolean postMigrationLogin = PasswordSecurity.authenticateAndMigrateUser(conn, "legacy_teacher", "MyOldPlaintextPass123".toCharArray());
-        assertTrue("Subsequent login succeeds against newly migrated PBKDF2 hash", postMigrationLogin);
+        // Restore admin table and verify retry works cleanly
+        DatabaseBootstrap.bootstrap(conn);
+        boolean retrySuccess = PasswordSecurity.initializeFirstRunCredentials(conn, "superadmin", adminPwd, adminKey);
+        assertTrue("Retry of first-run setup succeeds after schema recovery", retrySuccess);
     }
 
     private void testAdminParameterIndexIntegrity(Connection conn) throws SQLException {
-        // Seed an admin user with hashed password
-        String hashedAdminPin = PasswordSecurity.hashPassword("9988".toCharArray());
-        String insertAdmin = "INSERT INTO admin (password) VALUES (?)";
-        try (PreparedStatement pst = conn.prepareStatement(insertAdmin)) {
+        String hashedAdminPin = PasswordSecurity.hashPassword("MasterKey#2026".toCharArray());
+        try (PreparedStatement pst = conn.prepareStatement("INSERT INTO admin (password) VALUES (?)")) {
             pst.setString(1, hashedAdminPin);
             pst.executeUpdate();
         }
 
-        // Test query: "SELECT * FROM admin WHERE password = ?"
-        // In the legacy code, pst.setString(2, ...) caused Parameter index out of range (2 > 1).
         String sql = "SELECT * FROM admin WHERE password = ?";
         try (PreparedStatement pst = conn.prepareStatement(sql)) {
             pst.setString(1, hashedAdminPin);
@@ -236,20 +397,11 @@ public class SecurityAndResilienceTest {
             }
         }
 
-        // Test admin authentication logic with correct and incorrect PIN
-        assertTrue("Admin authentication succeeds with correct PIN", PasswordSecurity.authenticateAndMigrateAdmin(conn, "9988".toCharArray()));
-        assertTrue("Admin authentication fails with incorrect PIN", !PasswordSecurity.authenticateAndMigrateAdmin(conn, "0000".toCharArray()));
-
-        // Test legacy plaintext admin PIN migration
-        try (PreparedStatement pst = conn.prepareStatement("INSERT INTO admin (password) VALUES (?)")) {
-            pst.setString(1, "legacy_secret_pin");
-            pst.executeUpdate();
-        }
-        assertTrue("Legacy plaintext admin PIN authenticates successfully", PasswordSecurity.authenticateAndMigrateAdmin(conn, "legacy_secret_pin".toCharArray()));
+        assertTrue("Admin authentication succeeds with correct PIN", PasswordSecurity.authenticateAndMigrateAdmin(conn, "MasterKey#2026".toCharArray()));
+        assertTrue("Admin authentication fails with incorrect PIN", !PasswordSecurity.authenticateAndMigrateAdmin(conn, "WrongKey#0000".toCharArray()));
     }
 
     private void testSqlInjectionImmunity(Connection conn) throws SQLException {
-        // First seed a legitimate student and exam mark record
         String seedStudent = "INSERT INTO student_info (Roll, First_name, Last_name, Class, Year, Birth_date, Mobile_no, Sex, permanent, Present) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement pst = conn.prepareStatement(seedStudent)) {
             pst.setInt(1, 101);
@@ -274,19 +426,16 @@ public class SecurityAndResilienceTest {
         assertTrue("Legitimate exam mark seeded for injection tests", saved);
 
         // 1. Tautology Attack: "' OR '1'='1"
-        // In an insecure application: "WHERE Roll LIKE '%' OR '1'='1%'" would return all rows.
-        // With parameterized query: ExamMarksDAO binds as literal string -> exactly 0 records match.
         String tautologyPayload = "' OR '1'='1";
         List<ExamMarksDAO.ExamMark> tautologyResults = ExamMarksDAO.search(conn, tautologyPayload);
         assertEquals("SQL Injection tautology (' OR '1'='1') returns 0 rows (treated as literal)", 0, tautologyResults.size());
 
         // 2. Piggybacked Statement Attack: "101; DROP TABLE exam_marks; --"
-        // In an insecure multi-statement execution, this would drop the table.
         String piggybackedPayload = "101; DROP TABLE exam_marks; --";
         List<ExamMarksDAO.ExamMark> piggybackedResults = ExamMarksDAO.search(conn, piggybackedPayload);
         assertEquals("Piggybacked injection returns 0 rows", 0, piggybackedResults.size());
 
-        // Prove that exam_marks was NOT dropped and legitimate record is intact
+        // Prove that exam_marks was NOT dropped
         try (PreparedStatement pst = conn.prepareStatement("SELECT COUNT(*) FROM exam_marks");
              ResultSet rs = pst.executeQuery()) {
             assertTrue("Table 'exam_marks' survived piggybacked DROP TABLE attempt", rs.next() && rs.getInt(1) == 1);

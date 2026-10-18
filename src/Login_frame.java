@@ -21,9 +21,8 @@ public class Login_frame extends javax.swing.JFrame {
     
     private void checkFirstRunSetup() {
         if (conn == null) return;
-        try (Statement stmt = conn.createStatement();
-             ResultSet countRs = stmt.executeQuery("SELECT COUNT(*) FROM pass")) {
-            if (countRs.next() && countRs.getInt(1) == 0) {
+        try {
+            if (PasswordSecurity.isSetupRequired(conn)) {
                 SwingUtilities.invokeLater(() -> {
                     FirstRunSetupDialog dialog = new FirstRunSetupDialog(this, conn);
                     dialog.setVisible(true);
