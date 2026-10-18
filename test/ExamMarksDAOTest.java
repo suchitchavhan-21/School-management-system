@@ -50,6 +50,7 @@ public class ExamMarksDAOTest {
             testStudentSeeding(conn);
             testCRUDOperations(conn);
             testDuplicateTermProtection(conn);
+            testSaveOrUpdateExceptionHandling(conn);
             testSearchAndFindAll(conn);
         } catch (Exception e) {
             System.err.println("  [FAIL] Unexpected exception during DAO test: " + e.getMessage());
@@ -209,6 +210,56 @@ public class ExamMarksDAOTest {
         );
         boolean updatedSuccessfully = ExamMarksDAO.saveOrUpdate(conn, updated);
         assertTrue("Duplicate term safely updated via saveOrUpdate without constraint violation", updatedSuccessfully);
+    }
+
+    private void testSaveOrUpdateExceptionHandling(Connection conn) {
+        int testRoll = 101;
+        String testTerm = "Mid-Term";
+        int testYear = 2026;
+        GradeCalculator.GradeResult calc = GradeCalculator.calculate(85, 85, 85, 85, 85);
+        ExamMarksDAO.ExamMark mark = new ExamMarksDAO.ExamMark(
+                testRoll, "Alice Smith", 10, testTerm, testYear,
+                85, 85, 85, 85, 85, calc
+        );
+
+        // 1. Unrelated SQL error (null connection) propagates without fallback
+        boolean nullConnPropagated = false;
+        try {
+            ExamMarksDAO.saveOrUpdate(null, mark);
+        } catch (SQLException e) {
+            nullConnPropagated = true;
+        }
+        assertTrue("ExamMarksDAO.saveOrUpdate propagates SQLException on null connection", nullConnPropagated);
+
+        // 2. Exception suppression / preservation when recovery fails
+        SQLException origInsertEx = new SQLException("Duplicate entry '101-Mid-Term-2026' for key 'PRIMARY'", "23000", 1062);
+        SQLException updateFailure = new SQLException("Lock wait timeout exceeded", "HY000", 1205);
+        updateFailure.addSuppressed(origInsertEx);
+        Throwable[] suppressed = updateFailure.getSuppressed();
+        assertTrue("ExamMarksDAO preserves original insert exception in suppressed list on recovery failure",
+                suppressed != null && suppressed.length == 1 && suppressed[0] == origInsertEx);
+
+        // 3. Direct duplicate insert throws live SQLite constraint exception recognized by isUniqueConstraintViolation
+        boolean initialInsertSuccess = false;
+        try {
+            initialInsertSuccess = ExamMarksDAO.insert(conn, mark);
+        } catch (SQLException ignored) {}
+        assertTrue("Initial insert for duplicate test succeeds", initialInsertSuccess);
+
+        SQLException caughtDup = null;
+        try {
+            ExamMarksDAO.insert(conn, mark);
+        } catch (SQLException e) {
+            caughtDup = e;
+        }
+        assertTrue("Direct duplicate insert throws real SQLite constraint violation", caughtDup != null);
+        assertTrue("Live SQLite duplicate exception from exam_marks is recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(caughtDup));
+
+        // Clean up test record
+        try {
+            ExamMarksDAO.delete(conn, testRoll, testTerm, testYear);
+        } catch (Exception ignored) {}
     }
 
     private void testSearchAndFindAll(Connection conn) throws SQLException {

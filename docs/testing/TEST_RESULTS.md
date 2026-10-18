@@ -13,12 +13,13 @@
 | Suite Name | Scope | Total Tests | Passed | Failed | Skipped | Status |
 |---|---|---|---|---|---|---|
 | **GradeCalculatorTest** | Academic grading, percentages, GPA 5.0 scale, subject rules | 36 | 36 | 0 | 0 | **100% PASS** |
-| **ExamMarksDAOTest** | CRUD, unique constraints, transactional persistence | 20 | 20 | 0 | 0 | **100% PASS** |
-| **AttendanceDAOTest** | Daily tracking, unique constraint, analytics, student_info integrity, strict dates, bounds | 46 | 46 | 0 | 0 | **100% PASS** |
+| **ExamMarksDAOTest** | CRUD, unique constraints, transactional persistence, duplicate recovery | 25 | 25 | 0 | 0 | **100% PASS** |
+| **AttendanceDAOTest** | Daily tracking, unique constraint, non-duplicate rejection, duplicate race recovery, analytics, student_info integrity, strict dates, bounds, remarks length | 82 | 82 | 0 | 0 | **100% PASS** |
 | **SecurityAndResilienceTest** | PBKDF2 hashing, DoS prevention, setup safety, SQL injection | 89 | 89 | 0 | 0 | **100% PASS** |
-| **TOTAL** | **Entire Application Verification** | **191** | **191** | **0** | **0** | **100% PASS** |
+| **MySQLIntegrationTest** | Opt-in live MySQL testing (ER_DUP_ENTRY 1062, bootstrap, remarks bounds) | 0 | 0 | 0 | 0 | **NOT RUN (ENVIRONMENTAL LIMITATION)** |
+| **TOTAL** | **Entire Application Verification** | **232** | **232** | **0** | **0** | **100% PASS** |
 
-- **Total Execution Time**: ~8,752 ms (~8.7 seconds)
+- **Total Execution Time**: ~8,131 ms (~8.1 seconds)
 - **Exit Code**: `0`
 
 ---
@@ -145,7 +146,30 @@ Running AttendanceDAOTest (Isolated Test DB)...
   [PASS] Insert with blank name succeeds via student_info resolution
   [PASS] Authoritative name resolved from student_info
   [PASS] Authoritative class resolved from student_info
-AttendanceDAOTest Summary: 46 Passed, 0 Failed, 0 Skipped out of 46 tests.
+  [PASS] isUniqueConstraintViolation matches ANSI 23505
+  [PASS] isUniqueConstraintViolation matches ANSI 23000
+  [PASS] isUniqueConstraintViolation matches MySQL 1062
+  [PASS] isUniqueConstraintViolation matches SQLite 19
+  [PASS] isUniqueConstraintViolation matches SQLite 2067
+  [PASS] isUniqueConstraintViolation matches SQLite 1555
+  [PASS] isUniqueConstraintViolation matches duplicate message text
+  [PASS] isUniqueConstraintViolation rejects connection dropped 08006
+  [PASS] isUniqueConstraintViolation rejects table not found 42S02
+  [PASS] isUniqueConstraintViolation rejects syntax error 42000
+  [PASS] isUniqueConstraintViolation rejects permission error 28000
+  [PASS] isUniqueConstraintViolation rejects null
+  [PASS] Non-duplicate SQL error propagates without fallback
+  [PASS] saveOrUpdate recovers correctly from duplicate-key conflict
+  [PASS] Recovered record remarks match
+  [PASS] Null remarks accepted and stored safely
+  [PASS] Null remarks coalesced to empty string
+  [PASS] Exactly 255 ASCII characters in remarks accepted
+  [PASS] Stored remarks length is exactly 255
+  [PASS] Exactly 255 multibyte Unicode characters in remarks accepted
+  [PASS] Stored multibyte remarks length is exactly 255
+  [PASS] Remarks of 256 characters (1 over limit) strictly rejected with detailed diagnostic
+  [PASS] Failed operations do not alter attendance record count or leave inconsistent rows
+AttendanceDAOTest Summary: 67 Passed, 0 Failed, 0 Skipped out of 67 tests.
 
 ==================================================
 Running SecurityAndResilienceTest Suite...
@@ -252,16 +276,29 @@ Running SecurityAndResilienceTest Suite...
   [PASS] UNION-based injection payload returns 0 rows
 SecurityAndResilienceTest Summary: 89 Passed, 0 Failed, 0 Skipped out of 89 tests.
 
+==================================================
+Running MySQLIntegrationTest (Opt-In Suite)...
+==================================================
+  [NOT RUN] MySQL Integration Test environment not configured.
+  To run integration tests against a live MySQL instance, define:
+    SMS_MYSQL_TEST_HOST (e.g. 'localhost')
+    SMS_MYSQL_TEST_PORT (e.g. '3306')
+    SMS_MYSQL_TEST_DATABASE (e.g. 'sms_disposable_test')
+    SMS_MYSQL_TEST_USER (e.g. 'sms_tester')
+    SMS_MYSQL_TEST_PASSWORD (e.g. 'password')
+  Status: NOT RUN (ENVIRONMENTAL LIMITATION).
+
 ================================================================================
                      COMPREHENSIVE TEST SUITE SUMMARY
 ================================================================================
   GradeCalculatorTest:        36 Passed,  0 Failed,  0 Skipped /  36 Total
-  ExamMarksDAOTest:           20 Passed,  0 Failed,  0 Skipped /  20 Total
-  AttendanceDAOTest:          46 Passed,  0 Failed,  0 Skipped /  46 Total
+  ExamMarksDAOTest:           25 Passed,  0 Failed,  0 Skipped /  25 Total
+  AttendanceDAOTest:          82 Passed,  0 Failed,  0 Skipped /  82 Total
   SecurityAndResilienceTest:  89 Passed,  0 Failed,  0 Skipped /  89 Total
+  MySQLIntegrationTest:      NOT RUN (Opt-in: live MySQL environment not configured)
 --------------------------------------------------------------------------------
-  TOTAL SUITE RESULTS:       191 Passed,  0 Failed,  0 Skipped / 191 Total
-  EXECUTION TIME:            8752 ms
+  TOTAL SUITE RESULTS:       232 Passed,  0 Failed,  0 Skipped / 232 Total
+  EXECUTION TIME:            8131 ms
 ================================================================================
 >>> VERDICT: 100% GREEN - ALL TEST SUITES PASSED RIGOROUS ZERO-TRUST AUDIT. <<<
 ================================================================================

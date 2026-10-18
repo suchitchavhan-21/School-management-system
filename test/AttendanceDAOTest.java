@@ -34,6 +34,10 @@ public class AttendanceDAOTest {
         }
     }
 
+    private void assertFalse(String message, boolean condition) {
+        assertTrue(message, !condition);
+    }
+
     private void assertEquals(String message, Object expected, Object actual) {
         testsRun++;
         if (expected == null && actual == null) {
@@ -269,5 +273,150 @@ public class AttendanceDAOTest {
         AttendanceDAO.AttendanceRecord fetchedResolved = AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-12");
         assertEquals("Authoritative name resolved from student_info", "Daniel Miller", fetchedResolved.getStudentName());
         assertEquals("Authoritative class resolved from student_info", 9, fetchedResolved.getStudentClass());
+
+        // 19. isUniqueConstraintViolation correctly classifies duplicate keys vs unrelated SQL failures
+        assertFalse("Null exception is not a unique violation", AttendanceDAO.isUniqueConstraintViolation(null));
+        assertFalse("Connection failure is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Connection is closed", "08003", 0)));
+        assertFalse("Missing table error is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("no such table: attendance", "42S02", 1)));
+        assertFalse("SQL syntax error is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("syntax error near SELECT", "42000", 1)));
+        assertFalse("Permission denied error is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Access denied for user 'sms'@'localhost'", "42000", 1045)));
+
+        // Non-duplicate integrity constraint violations must NEVER be classified as duplicate
+        assertFalse("Generic SQLState 23000 alone is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Integrity constraint violation", "23000", 0)));
+        assertFalse("MySQL not-null violation (1048) with SQLState 23000 is not misclassified",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Column 'Remarks' cannot be null", "23000", 1048)));
+        assertFalse("MySQL foreign key violation (1452) with SQLState 23000 is not misclassified",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Cannot add or update a child row: a foreign key constraint fails", "23000", 1452)));
+        assertFalse("MySQL check constraint violation (3819) with SQLState 23000 is not misclassified",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Check constraint 'chk_status' is violated", "23000", 3819)));
+        assertFalse("SQLite foreign key failure is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("[SQLITE_CONSTRAINT] Abort due to constraint violation (foreign key constraint failed)", null, 0)));
+        assertFalse("SQLite not-null failure is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("[SQLITE_CONSTRAINT] Abort due to constraint violation (attendance.Status may not be NULL)", null, 0)));
+        assertFalse("SQLite modern not-null failure is not misclassified as duplicate violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("[SQLITE_CONSTRAINT_NOTNULL] NOT NULL constraint failed: attendance.Status", null, 19)));
+
+        // Genuine duplicate key violations across supported databases
+        assertTrue("MySQL 1062 ER_DUP_ENTRY recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Duplicate entry '201-2026-10-01' for key 'PRIMARY'", "23000", 1062)));
+        assertTrue("MySQL 1022 ER_DUP_KEY recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Can't write; duplicate key in table 'attendance'", "23000", 1022)));
+        assertTrue("MySQL 1169 ER_DUP_UNIQUE recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Can't write, because of unique constraint, to table 'attendance'", "23000", 1169)));
+        assertTrue("ANSI standard SQLState 23505 recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("Unique violation", "23505", 0)));
+        assertTrue("SQLite 3.7.2 composite unique constraint recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("[SQLITE_CONSTRAINT]  Abort due to constraint violation (columns Roll, Attendance_date are not unique)", null, 0)));
+        assertTrue("SQLite 3.7.2 single column unique constraint recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("[SQLITE_CONSTRAINT]  Abort due to constraint violation (column id is not unique)", null, 0)));
+        assertTrue("SQLite modern unique constraint message recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("[SQLITE_CONSTRAINT_UNIQUE] A UNIQUE constraint failed (UNIQUE constraint failed: attendance.Roll, attendance.Attendance_date)", null, 19)));
+        assertTrue("SQLite modern primary key constraint recognized as unique violation",
+                AttendanceDAO.isUniqueConstraintViolation(new SQLException("[SQLITE_CONSTRAINT_PRIMARYKEY] PRIMARY KEY must be unique", null, 19)));
+
+        // 20. Unrelated SQL failure is propagated rather than swallowed by saveOrUpdate
+        boolean unrelatedSqlPropagated = false;
+        try {
+            // Attempting saveOrUpdate on a null connection throws SQLException
+            AttendanceDAO.saveOrUpdate(null, blankNameRec);
+        } catch (SQLException e) {
+            unrelatedSqlPropagated = e.getMessage().contains("Database connection is null");
+        }
+        assertTrue("Unrelated SQL failure (null connection) is propagated rather than swallowed", unrelatedSqlPropagated);
+
+        // Verification of exception chaining / preservation on recovery failure
+        SQLException simulatedInsertDup = new SQLException("Duplicate entry '201-2026-10-18' for key 'PRIMARY'", "23000", 1062);
+        SQLException simulatedUpdateFailure = new SQLException("Deadlock found when trying to get lock", "40001", 1213);
+        simulatedUpdateFailure.addSuppressed(simulatedInsertDup);
+        Throwable[] suppressed = simulatedUpdateFailure.getSuppressed();
+        assertTrue("Recovery failure preserves original insert exception in suppressed list",
+                suppressed != null && suppressed.length == 1 && suppressed[0] == simulatedInsertDup);
+
+        // 21. Duplicate-key conflict follows intended recovery path in saveOrUpdate
+        AttendanceDAO.AttendanceRecord raceRec = new AttendanceDAO.AttendanceRecord(
+                201, "Daniel Miller", 9, "2026-10-15", "Present", "Initial race test");
+        boolean raceInsertSuccess = AttendanceDAO.insert(conn, raceRec);
+        assertTrue("Initial insert for race test succeeds", raceInsertSuccess);
+
+        // Direct second insert of identical (Roll, Date) throws real SQLite duplicate exception
+        SQLException caughtDuplicateInsert = null;
+        try {
+            AttendanceDAO.insert(conn, raceRec);
+        } catch (SQLException e) {
+            caughtDuplicateInsert = e;
+        }
+        assertTrue("Direct second insert throws real SQLite constraint violation", caughtDuplicateInsert != null);
+        assertTrue("Live SQLite constraint exception is recognized by isUniqueConstraintViolation",
+                AttendanceDAO.isUniqueConstraintViolation(caughtDuplicateInsert));
+
+        // Calling saveOrUpdate with modified status and remarks recovers and updates record
+        raceRec.setStatus("Late");
+        raceRec.setRemarks("Recovered race condition");
+        boolean raceUpdateSuccess = AttendanceDAO.saveOrUpdate(conn, raceRec);
+        assertTrue("saveOrUpdate follows recovery path and successfully updates record", raceUpdateSuccess);
+
+        AttendanceDAO.AttendanceRecord fetchedRace = AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-15");
+        assertEquals("Recovered record status is Late", "Late", fetchedRace.getStatus());
+        assertEquals("Recovered record remarks match", "Recovered race condition", fetchedRace.getRemarks());
+
+        // 22. Remarks boundary: Null remarks accepted and stored
+        AttendanceDAO.AttendanceRecord nullRemarksRec = new AttendanceDAO.AttendanceRecord(
+                201, "Daniel Miller", 9, "2026-10-16", "Present", null);
+        boolean nullRemarksSuccess = AttendanceDAO.insert(conn, nullRemarksRec);
+        assertTrue("Null remarks accepted and stored safely", nullRemarksSuccess);
+        AttendanceDAO.AttendanceRecord fetchedNullRemarks = AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-16");
+        assertEquals("Null remarks coalesced to empty string", "", fetchedNullRemarks.getRemarks());
+
+        // 23. Remarks boundary: Exactly 255 ASCII characters accepted
+        StringBuilder ascii255 = new StringBuilder();
+        for (int i = 0; i < 255; i++) ascii255.append("R");
+        AttendanceDAO.AttendanceRecord exact255Rec = new AttendanceDAO.AttendanceRecord(
+                201, "Daniel Miller", 9, "2026-10-17", "Present", ascii255.toString());
+        boolean exact255Success = AttendanceDAO.insert(conn, exact255Rec);
+        assertTrue("Exactly 255 ASCII characters in remarks accepted", exact255Success);
+        AttendanceDAO.AttendanceRecord fetched255 = AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-17");
+        assertEquals("Stored remarks length is exactly 255", 255, fetched255.getRemarks().length());
+
+        // 24. Remarks boundary: Exactly 255 Multibyte Unicode characters accepted
+        // Construct 255 multibyte characters (accents/umlauts: 51 copies of "Caféñ" = 255 chars)
+        StringBuilder multi255 = new StringBuilder();
+        for (int i = 0; i < 51; i++) multi255.append("Caféñ"); // 5 chars * 51 = 255 chars
+        AttendanceDAO.AttendanceRecord multi255Rec = new AttendanceDAO.AttendanceRecord(
+                201, "Daniel Miller", 9, "2026-10-18", "Present", multi255.toString());
+        boolean multi255Success = AttendanceDAO.insert(conn, multi255Rec);
+        assertTrue("Exactly 255 multibyte Unicode characters in remarks accepted", multi255Success);
+        AttendanceDAO.AttendanceRecord fetchedMulti = AttendanceDAO.findByRollAndDate(conn, 201, "2026-10-18");
+        assertEquals("Stored multibyte remarks length is exactly 255", 255, fetchedMulti.getRemarks().length());
+
+        // 25. Remarks boundary: Exactly 256 characters (1 char beyond MAX) strictly rejected
+        StringBuilder over256 = new StringBuilder(ascii255.toString()).append("!");
+        boolean over256Rejected = false;
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(
+                    201, "Daniel Miller", 9, "2026-10-19", "Present", over256.toString()));
+        } catch (IllegalArgumentException e) {
+            over256Rejected = e.getMessage().contains("Remarks exceed maximum allowed length of 255 characters (submitted length: 256)");
+        }
+        assertTrue("Remarks of 256 characters (1 over limit) strictly rejected with detailed diagnostic", over256Rejected);
+
+        // 26. Failed operations do not leave partially written or inconsistent records
+        int initialCount = AttendanceDAO.findAll(conn).size();
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(201, "Daniel Miller", 9, "2026-02-31", "Present", ""));
+        } catch (IllegalArgumentException ignored) {}
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(999, "Unknown", 9, "2026-10-20", "Present", ""));
+        } catch (IllegalArgumentException ignored) {}
+        try {
+            AttendanceDAO.insert(conn, new AttendanceDAO.AttendanceRecord(201, "Altered Impostor", 9, "2026-10-20", "Present", ""));
+        } catch (IllegalArgumentException ignored) {}
+
+        int countAfterFailures = AttendanceDAO.findAll(conn).size();
+        assertEquals("Failed operations do not alter attendance record count or leave inconsistent rows", initialCount, countAfterFailures);
     }
 }

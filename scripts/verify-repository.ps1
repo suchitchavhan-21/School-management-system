@@ -3,7 +3,7 @@
     Comprehensive Zero-Trust Repository & Release Verification Script.
 .DESCRIPTION
     Validates environment, configuration hygiene, secrets exclusion, compiles the project,
-    executes all 170+ automated tests, and verifies repository structure.
+    executes all 232 automated tests, and verifies repository structure.
 #>
 
 [CmdletBinding()]
@@ -21,13 +21,15 @@ $failures = @()
 # Step 1: Check Environment
 Write-Host "`n[CHECK 1/6] Verifying Java & Git Environment..." -ForegroundColor Yellow
 try {
-    $javaVer = java -version 2>&1
+    $null = Get-Command java -ErrorAction Stop
+    $null = Get-Command javac -ErrorAction Stop
+    $javaVer = cmd /c "java -version 2>&1"
     $javacVer = javac -version 2>&1
     Write-Host "  [PASS] Java Runtime: $($javaVer[0])" -ForegroundColor Green
     Write-Host "  [PASS] Java Compiler: $javacVer" -ForegroundColor Green
 } catch {
     $failures += "Java or javac is not available in PATH."
-    Write-Host "  [FAIL] Java compiler check failed." -ForegroundColor Red
+    Write-Host "  [FAIL] Java compiler check failed: $_" -ForegroundColor Red
 }
 
 # Step 2: Check Git Status

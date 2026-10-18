@@ -112,10 +112,19 @@ public class DatabaseBootstrap {
                     "Class INTEGER NOT NULL, " +
                     "Attendance_date VARCHAR(20) NOT NULL, " +
                     "Status VARCHAR(20) NOT NULL, " +
-                    "Remarks VARCHAR(100), " +
+                    "Remarks VARCHAR(255), " +
                     "Created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
                     "UNIQUE(Roll, Attendance_date)" +
                     ")");
+
+            // Migration check: Ensure existing MySQL installations have Remarks widened to VARCHAR(255)
+            if (isMySQL) {
+                try {
+                    stmt.executeUpdate("ALTER TABLE attendance MODIFY COLUMN Remarks VARCHAR(255) DEFAULT NULL");
+                } catch (Exception ignored) {
+                    // Safe execution: if table is newly created or column already modified
+                }
+            }
 
             // Rigorously verify that all required tables exist and can be queried
             String[] requiredTables = {"pass", "admin", "student_info", "teacher_info", "employee_info", "exam_marks", "attendance"};

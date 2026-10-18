@@ -28,14 +28,18 @@ public class SystemTestSuite {
         SecurityAndResilienceTest secTest = new SecurityAndResilienceTest();
         boolean secPassed = secTest.runAllTests();
 
+        // 5. MySQL Integration Suite (Opt-in via SMS_MYSQL_TEST_HOST)
+        MySQLIntegrationTest mysqlTest = new MySQLIntegrationTest();
+        boolean mysqlPassed = mysqlTest.runAllTests();
+
         long duration = System.currentTimeMillis() - startTime;
 
-        int totalRun = calcTest.getTestsRun() + daoTest.getTestsRun() + attendanceTest.getTestsRun() + secTest.getTestsRun();
-        int totalPassed = calcTest.getTestsPassed() + daoTest.getTestsPassed() + attendanceTest.getTestsPassed() + secTest.getTestsPassed();
-        int totalFailed = calcTest.getTestsFailed() + daoTest.getTestsFailed() + attendanceTest.getTestsFailed() + secTest.getTestsFailed();
-        int totalSkipped = calcTest.getTestsSkipped() + daoTest.getTestsSkipped() + attendanceTest.getTestsSkipped() + secTest.getTestsSkipped();
+        int totalRun = calcTest.getTestsRun() + daoTest.getTestsRun() + attendanceTest.getTestsRun() + secTest.getTestsRun() + mysqlTest.getTestsRun();
+        int totalPassed = calcTest.getTestsPassed() + daoTest.getTestsPassed() + attendanceTest.getTestsPassed() + secTest.getTestsPassed() + mysqlTest.getTestsPassed();
+        int totalFailed = calcTest.getTestsFailed() + daoTest.getTestsFailed() + attendanceTest.getTestsFailed() + secTest.getTestsFailed() + mysqlTest.getTestsFailed();
+        int totalSkipped = calcTest.getTestsSkipped() + daoTest.getTestsSkipped() + attendanceTest.getTestsSkipped() + secTest.getTestsSkipped() + mysqlTest.getTestsSkipped();
 
-        boolean allPassed = calcPassed && daoPassed && attendancePassed && secPassed && (totalFailed == 0) && (totalSkipped == 0) && (totalRun > 0);
+        boolean allPassed = calcPassed && daoPassed && attendancePassed && secPassed && mysqlPassed && (totalFailed == 0) && (totalSkipped == 0) && (totalRun > 0);
 
         System.out.println("================================================================================");
         System.out.println("                     COMPREHENSIVE TEST SUITE SUMMARY                           ");
@@ -48,6 +52,12 @@ public class SystemTestSuite {
                 attendanceTest.getTestsPassed(), attendanceTest.getTestsFailed(), attendanceTest.getTestsSkipped(), attendanceTest.getTestsRun());
         System.out.printf("  SecurityAndResilienceTest: %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
                 secTest.getTestsPassed(), secTest.getTestsFailed(), secTest.getTestsSkipped(), secTest.getTestsRun());
+        if (mysqlTest.wasExecuted()) {
+            System.out.printf("  MySQLIntegrationTest:      %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
+                    mysqlTest.getTestsPassed(), mysqlTest.getTestsFailed(), mysqlTest.getTestsSkipped(), mysqlTest.getTestsRun());
+        } else {
+            System.out.println("  MySQLIntegrationTest:      NOT RUN (Opt-in: live MySQL environment not configured)");
+        }
         System.out.println("--------------------------------------------------------------------------------");
         System.out.printf("  TOTAL SUITE RESULTS:       %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
                 totalPassed, totalFailed, totalSkipped, totalRun);

@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS `attendance` (
     `Class` INT NOT NULL,
     `Attendance_date` VARCHAR(20) NOT NULL,
     `Status` VARCHAR(20) NOT NULL,
-    `Remarks` VARCHAR(100) DEFAULT NULL,
+    `Remarks` VARCHAR(255) DEFAULT NULL,
     `Created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`Attendance_id`),
     UNIQUE KEY `uq_attendance_student_date` (`Roll`, `Attendance_date`),

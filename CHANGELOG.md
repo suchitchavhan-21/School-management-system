@@ -6,6 +6,14 @@ All notable changes to the **School Management System** are documented in this f
 
 ## [Unreleased] - 2026-10-18
 
+### Fixed & Hardened
+- **Duplicate-Key & Exception Handling**: Refactored `AttendanceDAO.saveOrUpdate` and `ExamMarksDAO.saveOrUpdate` to selectively intercept vendor-specific and SQLState unique constraint violations (`23505`, MySQL `1062`/`1022`/`1169`, SQLite `are not unique`/`is not unique`/`unique constraint failed`), attach suppressed exceptions via `addSuppressed()`, and strictly propagate unrelated database errors (connection drops, missing tables, syntax errors, permission failures). Generic SQLState `23000` alone is strictly excluded from duplicate classification to prevent misclassifying foreign-key and not-null violations. Added connection null-safety checks across `ExamMarksDAO`.
+- **Attendance Remarks Alignment**: Standardized `Remarks` column length to 255 characters across Java validation (`MAX_REMARKS_LENGTH = 255`), MySQL DDL (`Database/schema/schema-mysql.sql`), runtime auto-migration (`DatabaseBootstrap.java`), and migration script (`Database/migrations/002_widen_attendance_remarks.sql`).
+
+### Added
+- **Opt-In Live MySQL Integration Test Suite**: Added `test/MySQLIntegrationTest.java` running against real MySQL servers when `SMS_MYSQL_TEST_HOST` is configured, or reporting `NOT RUN (ENVIRONMENTAL LIMITATION)` without failing offline CI.
+- **Boundary & Resilience Regression Tests**: Expanded test suite to 232 automated tests with 100% pass verification, testing non-duplicate constraint rejections (foreign-key, not-null, check constraints), duplicate race recoveries, exception suppression chaining, exact 255-character ASCII and multibyte UTF-8 strings, 256-character rejection diagnostics, and atomic transaction preservation.
+
 ### Architecture & Repository Organization
 - **Production-Grade Directory Structure**: Reorganized repository with clear separation of concerns without breaking NetBeans GUI Builder `.form` pairing:
   - `docs/`: Centralized audit, security, architecture, and testing documentation.

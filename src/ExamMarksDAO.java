@@ -57,6 +57,7 @@ public class ExamMarksDAO {
      * Inserts a new exam mark record using parameterized queries.
      */
     public static boolean insert(Connection conn, ExamMark mark) throws SQLException {
+        if (conn == null) throw new SQLException("Database connection is null.");
         String sql = "INSERT INTO exam_marks (" +
                 "Roll, Student_name, Class, Exam_term, Exam_year, " +
                 "English, Math, Science, Social_studies, ICT, " +
@@ -89,6 +90,7 @@ public class ExamMarksDAO {
      * Updates an existing exam mark record by Roll, Term, and Year.
      */
     public static boolean update(Connection conn, ExamMark mark) throws SQLException {
+        if (conn == null) throw new SQLException("Database connection is null.");
         String sql = "UPDATE exam_marks SET " +
                 "Student_name = ?, Class = ?, " +
                 "English = ?, Math = ?, Science = ?, Social_studies = ?, ICT = ?, " +
@@ -119,13 +121,27 @@ public class ExamMarksDAO {
 
     /**
      * Saves or updates a mark record based on existence check.
+     * Narrowly handles concurrent insert races on unique key (Roll, Exam_term, Exam_year).
      */
     public static boolean saveOrUpdate(Connection conn, ExamMark mark) throws SQLException {
+        if (conn == null) throw new SQLException("Database connection is null.");
         ExamMark existing = findByRollTermYear(conn, mark.roll, mark.examTerm, mark.examYear);
         if (existing != null) {
             return update(conn, mark);
         } else {
-            return insert(conn, mark);
+            try {
+                return insert(conn, mark);
+            } catch (SQLException e) {
+                if (AttendanceDAO.isUniqueConstraintViolation(e)) {
+                    try {
+                        return update(conn, mark);
+                    } catch (SQLException updateEx) {
+                        updateEx.addSuppressed(e);
+                        throw updateEx;
+                    }
+                }
+                throw e;
+            }
         }
     }
 
@@ -133,6 +149,7 @@ public class ExamMarksDAO {
      * Deletes an exam mark record.
      */
     public static boolean delete(Connection conn, int roll, String examTerm, int examYear) throws SQLException {
+        if (conn == null) throw new SQLException("Database connection is null.");
         String sql = "DELETE FROM exam_marks WHERE Roll = ? AND Exam_term = ? AND Exam_year = ?";
         try (PreparedStatement pst = conn.prepareStatement(sql)) {
             pst.setInt(1, roll);
@@ -146,6 +163,7 @@ public class ExamMarksDAO {
      * Finds a single exam mark by Roll, Term, and Year.
      */
     public static ExamMark findByRollTermYear(Connection conn, int roll, String examTerm, int examYear) throws SQLException {
+        if (conn == null) throw new SQLException("Database connection is null.");
         String sql = "SELECT * FROM exam_marks WHERE Roll = ? AND Exam_term = ? AND Exam_year = ?";
         try (PreparedStatement pst = conn.prepareStatement(sql)) {
             pst.setInt(1, roll);

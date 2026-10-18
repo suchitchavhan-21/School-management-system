@@ -25,9 +25,80 @@ public class AttendanceDAO {
     private static final DateTimeFormatter STRICT_DATE_FORMATTER =
             DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
 
+    public static final int MAX_REMARKS_LENGTH = 255;
+
     public static final Set<String> VALID_STATUSES = Collections.unmodifiableSet(
             new HashSet<>(Arrays.asList("Present", "Absent", "Late", "Excused"))
     );
+
+    /**
+     * Determines whether an SQLException represents a genuine unique constraint or duplicate-key
+     * collision, as opposed to foreign-key, not-null, check constraint, connection failure,
+     * missing table, syntax error, or other unrelated operational failures.
+     *
+     * In particular, SQLState '23000' alone is a generic integrity constraint class in ANSI SQL
+     * and MySQL that encompasses NOT NULL and FOREIGN KEY errors; it NEVER establishes a duplicate
+     * violation by itself without verified duplicate vendor codes or duplicate message patterns.
+     */
+    public static boolean isUniqueConstraintViolation(SQLException ex) {
+        if (ex == null) return false;
+
+        int vendorCode = ex.getErrorCode();
+        String sqlState = ex.getSQLState();
+        String rawMsg = ex.getMessage();
+        String msg = rawMsg != null ? rawMsg.toLowerCase() : "";
+
+        // 1. Explicitly exclude non-duplicate integrity constraint violations:
+        // MySQL vendor codes: 1048 (ER_BAD_NULL_ERROR), 1364 (ER_NO_DEFAULT_FOR_FIELD),
+        // 1216/1217/1451/1452 (foreign key parent/child constraints), 3819 (ER_CHECK_CONSTRAINT_VIOLATED)
+        if (vendorCode == 1048 || vendorCode == 1364 ||
+            vendorCode == 1216 || vendorCode == 1217 ||
+            vendorCode == 1451 || vendorCode == 1452 ||
+            vendorCode == 3819) {
+            return false;
+        }
+
+        // Rule out non-duplicate errors by message pattern across SQLite, MySQL, and generic drivers
+        if (msg.contains("foreign key") ||
+            msg.contains("may not be null") ||
+            msg.contains("cannot be null") ||
+            msg.contains("not null constraint failed") ||
+            msg.contains("check constraint")) {
+            return false;
+        }
+
+        // 2. MySQL Vendor Error Codes for genuine duplicate keys:
+        // 1062 = ER_DUP_ENTRY ("Duplicate entry '%s' for key '%s'")
+        // 1022 = ER_DUP_KEY ("Can't write; duplicate key in table '%s'")
+        // 1169 = ER_DUP_UNIQUE ("Can't write, because of unique constraint")
+        if (vendorCode == 1062 || vendorCode == 1022 || vendorCode == 1169) {
+            return true;
+        }
+
+        // 3. ANSI SQL-92/99 specific SQLState for unique_violation:
+        // Class 23, Subclass 505 (23505) is specifically Unique Violation (PostgreSQL, Derby, H2, DB2).
+        // Generic SQLState 23000 alone is intentionally rejected because it encompasses NOT NULL and FK.
+        if ("23505".equals(sqlState)) {
+            return true;
+        }
+
+        // 4. Exact message patterns for SQLite (both bundled 3.7.2 and modern drivers) and generic drivers:
+        // SQLite 3.7.2: "columns Roll, Attendance_date are not unique", "column id is not unique"
+        // Modern SQLite: "UNIQUE constraint failed", "PRIMARY KEY must be unique"
+        // Generic drivers / wrapped connections: "duplicate entry '", "duplicate key"
+        if (msg.contains("are not unique") ||
+            msg.contains("is not unique") ||
+            msg.contains("unique constraint failed") ||
+            msg.contains("primary key must be unique") ||
+            msg.contains("sqlite_constraint_unique") ||
+            msg.contains("sqlite_constraint_primarykey") ||
+            msg.contains("duplicate entry '") ||
+            msg.contains("duplicate key")) {
+            return true;
+        }
+
+        return false;
+    }
 
     public static boolean isValidCalendarDate(String dateStr) {
         if (dateStr == null || dateStr.trim().length() != 10) return false;
@@ -104,8 +175,8 @@ public class AttendanceDAO {
 
         // 3. Validate Remarks bounds
         String remarks = record.getRemarks();
-        if (remarks != null && remarks.length() > 255) {
-            throw new IllegalArgumentException("Remarks exceed maximum allowed length of 255 characters.");
+        if (remarks != null && remarks.length() > MAX_REMARKS_LENGTH) {
+            throw new IllegalArgumentException("Remarks exceed maximum allowed length of " + MAX_REMARKS_LENGTH + " characters (submitted length: " + remarks.length() + ").");
         }
 
         // 4. Resolve against student_info
@@ -258,8 +329,17 @@ public class AttendanceDAO {
             try {
                 return insert(conn, record);
             } catch (SQLException e) {
-                // Fall back to update if concurrent insert race triggered unique constraint
-                return update(conn, record);
+                // Narrowly scoped handling: only fall back to update if this is a genuine duplicate-key conflict
+                if (isUniqueConstraintViolation(e)) {
+                    try {
+                        return update(conn, record);
+                    } catch (SQLException updateEx) {
+                        updateEx.addSuppressed(e);
+                        throw updateEx;
+                    }
+                }
+                // Do not misclassify or swallow unrelated SQL failures (syntax errors, missing tables, connection drops)
+                throw e;
             }
         }
     }
