@@ -3,7 +3,7 @@
     Comprehensive Zero-Trust Repository & Release Verification Script.
 .DESCRIPTION
     Validates environment, configuration hygiene, secrets exclusion, compiles the project,
-    executes all 232 automated tests, and verifies repository structure.
+    executes all 247 automated tests, and verifies repository structure.
 #>
 
 [CmdletBinding()]

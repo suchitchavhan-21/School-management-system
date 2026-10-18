@@ -58,7 +58,7 @@ School Management system in java/
 ├── nbproject/                 # NetBeans Ant configuration & metadata
 ├── scripts/                   # Automation scripts (build.ps1, test.ps1, run.ps1, verify-repository.ps1)
 ├── src/                       # Application source code & NetBeans GUI Builder .form files
-├── test/                      # Comprehensive zero-trust test suite (232 tests)
+├── test/                      # Comprehensive zero-trust test suite (247 tests)
 ├── .gitattributes             # Line ending normalization & binary attributes
 ├── .gitignore                 # Build and secret ignore rules
 ├── CHANGELOG.md               # Version history and milestone documentation
@@ -93,7 +93,7 @@ javac -encoding UTF-8 -cp "dist/lib/*;src" -d build/classes src/*.java test/*.ja
 # Or directly using java:
 java -cp "dist/lib/*;build/classes" SystemTestSuite
 ```
-*Executes all 232 automated unit, integration, and security resilience tests with 100% pass verification.*
+*Executes all 247 automated unit, integration, and security resilience tests with 100% pass verification.*
 
 ### C. Verify Repository Integrity
 ```powershell

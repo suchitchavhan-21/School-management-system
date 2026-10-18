@@ -1,5 +1,6 @@
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -119,10 +120,26 @@ public class DatabaseBootstrap {
 
             // Migration check: Ensure existing MySQL installations have Remarks widened to VARCHAR(255)
             if (isMySQL) {
-                try {
-                    stmt.executeUpdate("ALTER TABLE attendance MODIFY COLUMN Remarks VARCHAR(255) DEFAULT NULL");
-                } catch (Exception ignored) {
-                    // Safe execution: if table is newly created or column already modified
+                int currentSize = getColumnSize(conn, "attendance", "Remarks");
+                // Only execute ALTER TABLE if existing column is positively identified as narrower than 255
+                // (e.g. legacy installations initialized with VARCHAR(100))
+                if (currentSize > 0 && currentSize < 255) {
+                    try {
+                        stmt.executeUpdate("ALTER TABLE attendance MODIFY COLUMN Remarks VARCHAR(255) DEFAULT NULL");
+                    } catch (SQLException alterEx) {
+                        int postAlterSize = getColumnSize(conn, "attendance", "Remarks");
+                        if (postAlterSize < 255) {
+                            throw new SQLException("[DatabaseBootstrap] Migration failed: Unable to widen attendance.Remarks to VARCHAR(255): "
+                                    + alterEx.getMessage(), alterEx);
+                        }
+                    }
+                }
+
+                // Strictly verify that attendance.Remarks supports at least 255 characters
+                int verifiedSize = getColumnSize(conn, "attendance", "Remarks");
+                if (verifiedSize > 0 && verifiedSize < 255) {
+                    throw new SQLException("[DatabaseBootstrap] Migration verification failed: attendance.Remarks column size is "
+                            + verifiedSize + ", but at least 255 characters are required.");
                 }
             }
 
@@ -145,5 +162,29 @@ public class DatabaseBootstrap {
             System.err.println("[DatabaseBootstrap] Critical error during bootstrap: " + e.getMessage());
             throw new SQLException("[DatabaseBootstrap] Unexpected error during bootstrap: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Inspects column size in database metadata across case variations.
+     * Returns the defined column size, or -1 if the column is not found or metadata is inaccessible.
+     */
+    public static int getColumnSize(Connection conn, String tableName, String columnName) {
+        if (conn == null || tableName == null || columnName == null) return -1;
+        try {
+            DatabaseMetaData meta = conn.getMetaData();
+            String catalog = conn.getCatalog();
+            String[] tables = {tableName, tableName.toLowerCase(), tableName.toUpperCase()};
+            String[] columns = {columnName, columnName.toLowerCase(), columnName.toUpperCase()};
+            for (String t : tables) {
+                for (String c : columns) {
+                    try (ResultSet rs = meta.getColumns(catalog, null, t, c)) {
+                        if (rs.next()) {
+                            return rs.getInt("COLUMN_SIZE");
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return -1;
     }
 }

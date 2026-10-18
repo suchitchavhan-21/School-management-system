@@ -1,23 +1,26 @@
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
- * Opt-In Integration Test Suite for MySQL Enterprise Persistence.
+ * Opt-In Integration Test Suite for MySQL Enterprise Persistence with Zero-Trust Safety Guards.
  * 
  * Safely tests real MySQL database interactions including:
+ * - Safety guard validation: refusal of production names and mandatory opt-in flags.
  * - MySQL dialect bootstrapping and schema creation.
  * - Attendance insert, update, and find operations.
  * - Duplicate key conflict detection (MySQL error code 1062 / ER_DUP_ENTRY / SQLState 23000).
  * - Race-safe saveOrUpdate execution in MySQL.
  * - Remarks boundary handling in VARCHAR(255).
- * - Transaction rollback and exception propagation.
+ * - Targeted, isolated cleanup of only test-created records.
  * 
  * ZERO-TRUST SAFETY:
- * Requires explicit environment variable configuration to execute against a disposable test DB.
+ * Requires explicit environment variable configuration AND an explicit opt-in flag
+ * (SMS_MYSQL_ENABLE_DESTRUCTIVE_INTEGRATION_TESTS=true) to execute live tests against a disposable test DB.
  * Never modifies or connects to production data. If unconfigured or unreachable, safely marks
- * validation as NOT RUN (ENVIRONMENTAL LIMITATION) without failing offline test suites.
+ * live validation as NOT RUN (ENVIRONMENTAL LIMITATION) without failing offline test suites.
  */
 public class MySQLIntegrationTest {
 
@@ -33,6 +36,64 @@ public class MySQLIntegrationTest {
     public int getTestsSkipped() { return testsSkipped; }
     public boolean wasExecuted() { return executed; }
 
+    public static class SafetyCheckResult {
+        public final boolean isSafe;
+        public final String reason;
+
+        public SafetyCheckResult(boolean isSafe, String reason) {
+            this.isSafe = isSafe;
+            this.reason = reason;
+        }
+    }
+
+    /**
+     * Strictly evaluates whether a database is safe for destructive integration testing.
+     * Requires an explicit opt-in flag and a database name positively containing a disposable keyword
+     * while strictly excluding any production-like indicators.
+     */
+    public static SafetyCheckResult evaluateDatabaseSafety(String dbName, String optInFlag) {
+        if (optInFlag == null || !"true".equalsIgnoreCase(optInFlag.trim())) {
+            return new SafetyCheckResult(false,
+                "Missing mandatory opt-in safety flag: SMS_MYSQL_ENABLE_DESTRUCTIVE_INTEGRATION_TESTS must be explicitly set to 'true'.");
+        }
+
+        if (dbName == null || dbName.trim().isEmpty()) {
+            return new SafetyCheckResult(false, "Database name cannot be null or empty.");
+        }
+
+        String lower = dbName.trim().toLowerCase();
+
+        // 1. Explicit prohibition of production-like keywords
+        String[] prohibitedTerms = {"prod", "production", "school", "live", "master", "release", "real", "deploy"};
+        for (String term : prohibitedTerms) {
+            if (lower.equals(term) || lower.startsWith(term + "_") || lower.endsWith("_" + term) || lower.contains("_" + term + "_")) {
+                return new SafetyCheckResult(false,
+                    "Database name '" + dbName + "' contains production indicator '" + term + "'. Execution strictly prohibited.");
+            }
+        }
+        if (lower.equals("student_database") || lower.equals("students_database")) {
+            return new SafetyCheckResult(false,
+                "Database name '" + dbName + "' matches production default schema. Must use dedicated disposable test database.");
+        }
+
+        // 2. Mandatory presence of disposable/test keyword
+        String[] requiredDisposableTerms = {"test", "disposable", "scratch", "ephemeral", "sandbox", "ci_temp"};
+        boolean containsDisposableTerm = false;
+        for (String term : requiredDisposableTerms) {
+            if (lower.contains(term)) {
+                containsDisposableTerm = true;
+                break;
+            }
+        }
+
+        if (!containsDisposableTerm) {
+            return new SafetyCheckResult(false,
+                "Database name '" + dbName + "' must explicitly include a disposable keyword (e.g. 'test', 'disposable', 'scratch', 'sandbox').");
+        }
+
+        return new SafetyCheckResult(true, "Database '" + dbName + "' is verified as a safe, disposable test database.");
+    }
+
     private void assertTrue(String message, boolean condition) {
         testsRun++;
         if (condition) {
@@ -42,6 +103,10 @@ public class MySQLIntegrationTest {
             testsFailed++;
             System.err.println("  [FAIL] " + message);
         }
+    }
+
+    private void assertFalse(String message, boolean condition) {
+        assertTrue(message, !condition);
     }
 
     private void assertEquals(String message, Object expected, Object actual) {
@@ -60,25 +125,39 @@ public class MySQLIntegrationTest {
 
     public boolean runAllTests() {
         System.out.println("==================================================");
-        System.out.println("Running MySQLIntegrationTest (Opt-In Suite)...");
+        System.out.println("Running MySQLIntegrationTest (Safety Guard & Suite)...");
         System.out.println("==================================================");
 
+        // 1. Always execute Safety Guard Unit Tests (offline verifiable)
+        runSafetyGuardTests();
+
+        // 2. Check for Live MySQL Environment Configuration
         String host = getEnvOrProp("SMS_MYSQL_TEST_HOST", "sms.mysql.test.host");
         String port = getEnvOrProp("SMS_MYSQL_TEST_PORT", "sms.mysql.test.port");
         String db = getEnvOrProp("SMS_MYSQL_TEST_DATABASE", "sms.mysql.test.database");
         String user = getEnvOrProp("SMS_MYSQL_TEST_USER", "sms.mysql.test.user");
         String pass = getEnvOrProp("SMS_MYSQL_TEST_PASSWORD", "sms.mysql.test.password");
+        String optIn = getEnvOrProp("SMS_MYSQL_ENABLE_DESTRUCTIVE_INTEGRATION_TESTS", "sms.mysql.enable.destructive.integration.tests");
 
         if (host == null || host.trim().isEmpty() || db == null || db.trim().isEmpty() || user == null || user.trim().isEmpty()) {
-            System.out.println("  [NOT RUN] MySQL Integration Test environment not configured.");
+            System.out.println("  [NOT RUN] Live MySQL host/connection environment not configured.");
             System.out.println("  To run integration tests against a live MySQL instance, define:");
             System.out.println("    SMS_MYSQL_TEST_HOST (e.g. 'localhost')");
             System.out.println("    SMS_MYSQL_TEST_PORT (e.g. '3306')");
             System.out.println("    SMS_MYSQL_TEST_DATABASE (e.g. 'sms_disposable_test')");
             System.out.println("    SMS_MYSQL_TEST_USER (e.g. 'sms_tester')");
             System.out.println("    SMS_MYSQL_TEST_PASSWORD (e.g. 'password')");
+            System.out.println("    SMS_MYSQL_ENABLE_DESTRUCTIVE_INTEGRATION_TESTS ('true')");
             System.out.println("  Status: NOT RUN (ENVIRONMENTAL LIMITATION).\n");
-            return true;
+            return testsFailed == 0;
+        }
+
+        // 3. Evaluate safety of target database
+        SafetyCheckResult safety = evaluateDatabaseSafety(db, optIn);
+        if (!safety.isSafe) {
+            System.err.println("  [REFUSED] MySQL Integration Test execution aborted for safety: " + safety.reason);
+            testsFailed++;
+            return false;
         }
 
         if (port == null || port.trim().isEmpty()) port = "3306";
@@ -92,10 +171,10 @@ public class MySQLIntegrationTest {
             Class.forName("com.mysql.jdbc.Driver");
             conn = DriverManager.getConnection(url, user.trim(), pass);
             executed = true;
-            System.out.println("  [INFO] Connected to disposable MySQL test database: " + host + ":" + port + "/" + db);
+            System.out.println("  [INFO] Connected to verified disposable MySQL test database: " + host + ":" + port + "/" + db);
 
-            // Execute test lifecycle
-            runMySQLTests(conn);
+            // Execute live test lifecycle
+            runLiveMySQLTests(conn);
 
         } catch (ClassNotFoundException e) {
             System.err.println("  [FAIL] MySQL JDBC Driver not found: " + e.getMessage());
@@ -121,17 +200,52 @@ public class MySQLIntegrationTest {
         return testsFailed == 0;
     }
 
-    private void runMySQLTests(Connection conn) throws SQLException {
+    private void runSafetyGuardTests() {
+        System.out.println("--- Subsuite: Database Safety Guard Validation ---");
+        // Refusal paths
+        assertFalse("Safety guard rejects missing opt-in flag", evaluateDatabaseSafety("sms_disposable_test", null).isSafe);
+        assertFalse("Safety guard rejects opt-in 'false'", evaluateDatabaseSafety("sms_disposable_test", "false").isSafe);
+        assertFalse("Safety guard rejects empty opt-in", evaluateDatabaseSafety("sms_disposable_test", "").isSafe);
+        assertFalse("Safety guard rejects null database name", evaluateDatabaseSafety(null, "true").isSafe);
+        assertFalse("Safety guard rejects empty database name", evaluateDatabaseSafety("  ", "true").isSafe);
+        assertFalse("Safety guard rejects 'production' database", evaluateDatabaseSafety("production", "true").isSafe);
+        assertFalse("Safety guard rejects 'prod_sms' database", evaluateDatabaseSafety("prod_sms", "true").isSafe);
+        assertFalse("Safety guard rejects 'school_system' database", evaluateDatabaseSafety("school_system", "true").isSafe);
+        assertFalse("Safety guard rejects 'live_database' database", evaluateDatabaseSafety("live_database", "true").isSafe);
+        assertFalse("Safety guard rejects default 'student_database'", evaluateDatabaseSafety("student_database", "true").isSafe);
+        assertFalse("Safety guard rejects database without disposable term", evaluateDatabaseSafety("my_custom_db", "true").isSafe);
+
+        // Acceptance paths
+        assertTrue("Safety guard accepts 'sms_disposable_test' with opt-in", evaluateDatabaseSafety("sms_disposable_test", "true").isSafe);
+        assertTrue("Safety guard accepts 'sms_test_sandbox' with opt-in", evaluateDatabaseSafety("sms_test_sandbox", "true").isSafe);
+        assertTrue("Safety guard accepts 'ci_temp_scratch' with opt-in", evaluateDatabaseSafety("ci_temp_scratch", "true").isSafe);
+        assertTrue("Safety guard accepts 'ephemeral_unit_test' with opt-in", evaluateDatabaseSafety("ephemeral_unit_test", "true").isSafe);
+    }
+
+    private void runLiveMySQLTests(Connection conn) throws SQLException {
+        System.out.println("--- Subsuite: Live MySQL Operations & Resilience ---");
+
         // 1. Bootstrap schema in MySQL
         boolean bootstrapped = DatabaseBootstrap.bootstrap(conn);
         assertTrue("MySQL schema bootstrap succeeds idempotently", bootstrapped);
 
-        int testRoll = 998801;
+        // Dynamically generated unique roll number to prevent any possibility of colliding with pre-existing records
+        int testRoll = 920000 + (int)(System.currentTimeMillis() % 70000);
         String testDate = "2026-10-18";
 
+        boolean studentCreated = false;
+        boolean attendanceCreated = false;
+
         try {
-            // Clean any stale test rows first
-            cleanupTestRecords(conn, testRoll, testDate);
+            // Verify roll number is strictly unoccupied before writing
+            try (PreparedStatement checkPst = conn.prepareStatement("SELECT 1 FROM student_info WHERE Roll = ?")) {
+                checkPst.setInt(1, testRoll);
+                try (ResultSet rs = checkPst.executeQuery()) {
+                    if (rs.next()) {
+                        throw new IllegalStateException("Safety abort: Roll number " + testRoll + " already exists in student_info. Halting test.");
+                    }
+                }
+            }
 
             // 2. Seed student in MySQL student_info
             String seedStudent = "INSERT INTO student_info (Roll, First_name, Last_name, Class, Year, Birth_date, Mobile_no, Sex, permanent, Present) " +
@@ -147,13 +261,16 @@ public class MySQLIntegrationTest {
                 pst.setString(8, "male");
                 pst.setString(9, "Database Lab");
                 pst.setString(10, "Database Lab");
-                assertTrue("Seed student in MySQL student_info", pst.executeUpdate() > 0);
+                boolean seeded = pst.executeUpdate() > 0;
+                if (seeded) studentCreated = true;
+                assertTrue("Seed unique student in MySQL student_info", seeded);
             }
 
             // 3. Normal Attendance Insert in MySQL
             AttendanceDAO.AttendanceRecord rec1 = new AttendanceDAO.AttendanceRecord(
                     testRoll, "MySQL Tester", 10, testDate, "Present", "MySQL live test");
             boolean inserted = AttendanceDAO.insert(conn, rec1);
+            if (inserted) attendanceCreated = true;
             assertTrue("Normal attendance insert succeeds in MySQL", inserted);
 
             // 4. Duplicate insert triggers MySQL unique constraint (error code 1062)
@@ -196,24 +313,34 @@ public class MySQLIntegrationTest {
 
             // 8. Delete record in MySQL
             boolean deleted = AttendanceDAO.delete(conn, testRoll, testDate);
+            if (deleted) attendanceCreated = false;
             assertTrue("Attendance record deleted successfully from MySQL", deleted);
 
         } finally {
-            cleanupTestRecords(conn, testRoll, testDate);
+            // Targeted cleanup strictly scoped to rows created by this specific run
+            cleanupTestRecords(conn, testRoll, testDate, attendanceCreated, studentCreated);
         }
     }
 
-    private void cleanupTestRecords(Connection conn, int roll, String date) {
-        try (PreparedStatement pst1 = conn.prepareStatement("DELETE FROM attendance WHERE Roll = ? AND Attendance_date = ?")) {
-            pst1.setInt(1, roll);
-            pst1.setString(2, date);
-            pst1.executeUpdate();
-        } catch (Exception ignored) {}
+    private void cleanupTestRecords(Connection conn, int roll, String date, boolean cleanAttendance, boolean cleanStudent) {
+        if (cleanAttendance) {
+            try (PreparedStatement pst1 = conn.prepareStatement("DELETE FROM attendance WHERE Roll = ? AND Attendance_date = ?")) {
+                pst1.setInt(1, roll);
+                pst1.setString(2, date);
+                pst1.executeUpdate();
+            } catch (SQLException ex) {
+                System.err.println("  [CLEANUP WARNING] Failed to delete test attendance record for Roll " + roll + ": " + ex.getMessage());
+            }
+        }
 
-        try (PreparedStatement pst2 = conn.prepareStatement("DELETE FROM student_info WHERE Roll = ?")) {
-            pst2.setInt(1, roll);
-            pst2.executeUpdate();
-        } catch (Exception ignored) {}
+        if (cleanStudent) {
+            try (PreparedStatement pst2 = conn.prepareStatement("DELETE FROM student_info WHERE Roll = ?")) {
+                pst2.setInt(1, roll);
+                pst2.executeUpdate();
+            } catch (SQLException ex) {
+                System.err.println("  [CLEANUP WARNING] Failed to delete test student record for Roll " + roll + ": " + ex.getMessage());
+            }
+        }
     }
 
     private String getEnvOrProp(String envKey, String propKey) {

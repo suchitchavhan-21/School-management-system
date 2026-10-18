@@ -53,10 +53,11 @@ public class SystemTestSuite {
         System.out.printf("  SecurityAndResilienceTest: %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
                 secTest.getTestsPassed(), secTest.getTestsFailed(), secTest.getTestsSkipped(), secTest.getTestsRun());
         if (mysqlTest.wasExecuted()) {
-            System.out.printf("  MySQLIntegrationTest:      %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",
+            System.out.printf("  MySQLIntegrationTest:      %3d Passed, %2d Failed, %2d Skipped / %3d Total (Live MySQL)\n",
                     mysqlTest.getTestsPassed(), mysqlTest.getTestsFailed(), mysqlTest.getTestsSkipped(), mysqlTest.getTestsRun());
         } else {
-            System.out.println("  MySQLIntegrationTest:      NOT RUN (Opt-in: live MySQL environment not configured)");
+            System.out.printf("  MySQLIntegrationTest:      %3d Passed (Safety Guard) / Live MySQL: NOT RUN (ENVIRONMENTAL LIMITATION)\n",
+                    mysqlTest.getTestsPassed());
         }
         System.out.println("--------------------------------------------------------------------------------");
         System.out.printf("  TOTAL SUITE RESULTS:       %3d Passed, %2d Failed, %2d Skipped / %3d Total\n",

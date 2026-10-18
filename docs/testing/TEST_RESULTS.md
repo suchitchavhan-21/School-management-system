@@ -16,10 +16,10 @@
 | **ExamMarksDAOTest** | CRUD, unique constraints, transactional persistence, duplicate recovery | 25 | 25 | 0 | 0 | **100% PASS** |
 | **AttendanceDAOTest** | Daily tracking, unique constraint, non-duplicate rejection, duplicate race recovery, analytics, student_info integrity, strict dates, bounds, remarks length | 82 | 82 | 0 | 0 | **100% PASS** |
 | **SecurityAndResilienceTest** | PBKDF2 hashing, DoS prevention, setup safety, SQL injection | 89 | 89 | 0 | 0 | **100% PASS** |
-| **MySQLIntegrationTest** | Opt-in live MySQL testing (ER_DUP_ENTRY 1062, bootstrap, remarks bounds) | 0 | 0 | 0 | 0 | **NOT RUN (ENVIRONMENTAL LIMITATION)** |
-| **TOTAL** | **Entire Application Verification** | **232** | **232** | **0** | **0** | **100% PASS** |
+| **MySQLIntegrationTest** | Disposable DB safety guard validation & live MySQL persistence | 15 | 15 | 0 | 0 | **100% PASS (Guard)**<br>*Live MySQL: NOT RUN* |
+| **TOTAL** | **Entire Application Verification** | **247** | **247** | **0** | **0** | **100% PASS** |
 
-- **Total Execution Time**: ~8,131 ms (~8.1 seconds)
+- **Total Execution Time**: ~8,483 ms (~8.5 seconds)
 - **Exit Code**: `0`
 
 ---
@@ -277,15 +277,32 @@ Running SecurityAndResilienceTest Suite...
 SecurityAndResilienceTest Summary: 89 Passed, 0 Failed, 0 Skipped out of 89 tests.
 
 ==================================================
-Running MySQLIntegrationTest (Opt-In Suite)...
+Running MySQLIntegrationTest (Safety Guard & Suite)...
 ==================================================
-  [NOT RUN] MySQL Integration Test environment not configured.
+--- Subsuite: Database Safety Guard Validation ---
+  [PASS] Safety guard rejects missing opt-in flag
+  [PASS] Safety guard rejects opt-in 'false'
+  [PASS] Safety guard rejects empty opt-in
+  [PASS] Safety guard rejects null database name
+  [PASS] Safety guard rejects empty database name
+  [PASS] Safety guard rejects 'production' database
+  [PASS] Safety guard rejects 'prod_sms' database
+  [PASS] Safety guard rejects 'school_system' database
+  [PASS] Safety guard rejects 'live_database' database
+  [PASS] Safety guard rejects default 'student_database'
+  [PASS] Safety guard rejects database without disposable term
+  [PASS] Safety guard accepts 'sms_disposable_test' with opt-in
+  [PASS] Safety guard accepts 'sms_test_sandbox' with opt-in
+  [PASS] Safety guard accepts 'ci_temp_scratch' with opt-in
+  [PASS] Safety guard accepts 'ephemeral_unit_test' with opt-in
+  [NOT RUN] Live MySQL host/connection environment not configured.
   To run integration tests against a live MySQL instance, define:
     SMS_MYSQL_TEST_HOST (e.g. 'localhost')
     SMS_MYSQL_TEST_PORT (e.g. '3306')
     SMS_MYSQL_TEST_DATABASE (e.g. 'sms_disposable_test')
     SMS_MYSQL_TEST_USER (e.g. 'sms_tester')
     SMS_MYSQL_TEST_PASSWORD (e.g. 'password')
+    SMS_MYSQL_ENABLE_DESTRUCTIVE_INTEGRATION_TESTS ('true')
   Status: NOT RUN (ENVIRONMENTAL LIMITATION).
 
 ================================================================================
@@ -295,10 +312,10 @@ Running MySQLIntegrationTest (Opt-In Suite)...
   ExamMarksDAOTest:           25 Passed,  0 Failed,  0 Skipped /  25 Total
   AttendanceDAOTest:          82 Passed,  0 Failed,  0 Skipped /  82 Total
   SecurityAndResilienceTest:  89 Passed,  0 Failed,  0 Skipped /  89 Total
-  MySQLIntegrationTest:      NOT RUN (Opt-in: live MySQL environment not configured)
+  MySQLIntegrationTest:       15 Passed (Safety Guard) / Live MySQL: NOT RUN (ENVIRONMENTAL LIMITATION)
 --------------------------------------------------------------------------------
-  TOTAL SUITE RESULTS:       232 Passed,  0 Failed,  0 Skipped / 232 Total
-  EXECUTION TIME:            8131 ms
+  TOTAL SUITE RESULTS:       247 Passed,  0 Failed,  0 Skipped / 247 Total
+  EXECUTION TIME:            8495 ms
 ================================================================================
 >>> VERDICT: 100% GREEN - ALL TEST SUITES PASSED RIGOROUS ZERO-TRUST AUDIT. <<<
 ================================================================================

@@ -2,8 +2,8 @@
 .SYNOPSIS
     Runs the automated test suite for the School Management System.
 .DESCRIPTION
-    Executes all 170+ unit, integration, and security tests across GradeCalculatorTest,
-    ExamMarksDAOTest, AttendanceDAOTest, and SecurityAndResilienceTest using an isolated SQLite database.
+    Executes all automated unit, integration, and security resilience tests across GradeCalculatorTest,
+    ExamMarksDAOTest, AttendanceDAOTest, SecurityAndResilienceTest, and MySQLIntegrationTest.
 #>
 
 [CmdletBinding()]
